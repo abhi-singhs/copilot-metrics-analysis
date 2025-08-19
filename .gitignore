@@ -1,0 +1,59 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
+
+# Node / tooling (in case a build step is added later)
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.cache/
+.eslintcache
+
+# Build / Dist artifacts
+dist/
+build/
+.tmp/
+.temp/
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Environment / Secrets
+.env
+.env.*
+*.local
+
+# Data exports & large local input files (keep sample schema files out of repo)
+# Place large or sensitive data exports in data/ (not committed)
+data/
+*.jsonl
+*.ndjson
+# Allow small config/sample JSON files
+!/*.json
+
+# Generated reports
+*.pdf
+
+# Mac / Linux misc
+*.DS_Store
+.Trashes
+
+# Archives / dumps
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# Temporary files
+~$*
+*.tmp

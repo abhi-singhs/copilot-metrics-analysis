@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GitHub Copilot Metrics Analysis</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body class="light">
+    <header class="app-header">
+        <div class="logo-title">
+            <h1>GitHub Copilot Metrics Data Analysis Page</h1>
+        </div>
+    </header>
+    <main id="mainContent" tabindex="-1">
+    <section class="panel controls-panel" role="region" aria-label="Filters and data controls">
+            <p class="small-note">Upload a GitHub Copilot enterprise export (JSON array, object, or JSON Lines) to begin analysis.</p>
+            <form id="filtersForm" class="filters-form" novalidate>
+                <fieldset class="data-group">
+                    <legend class="visually-hidden">Data Sources</legend>
+                    <div class="controls-grid">
+                        <div class="control-item file-picker" id="metricsFileWrap">
+                            <label for="jsonFileInput">Upload Copilot Metrics JSON<span class="req-indicator" aria-hidden="true">*</span></label>
+                            <input type="file" id="jsonFileInput" accept=".json,.jsonl,.ndjson,.txt,application/json" aria-describedby="metricsFileHelp" required />
+                            <div id="metricsFileHelp" class="assist-text">JSON array, object wrapper, or JSON Lines with usage records.</div>
+                        </div>
+                        <div class="control-item file-picker">
+                            <label for="membersFileInput">Upload Org Members JSON <span class="optional">(optional)</span></label>
+                            <input type="file" id="membersFileInput" accept=".json,.jsonl,.ndjson,.txt,application/json" aria-describedby="membersFileHelp" />
+                            <div id="membersFileHelp" class="assist-text">Array / JSON Lines containing objects with a <code>login</code> field.</div>
+                        </div>
+                        <div class="control-item">
+                            <label for="enterpriseName">Enterprise Name <span class="optional">(PDF only)</span></label>
+                            <textarea id="enterpriseName" class="compact-textarea" rows="2" placeholder="e.g. OctoCorp Enterprise" aria-describedby="enterpriseNameHelp"></textarea>
+                            <div id="enterpriseNameHelp" class="assist-text">Used only to label the exported PDF (not stored).</div>
+                        </div>
+                        <div class="control-item">
+                            <label for="orgName">Organization Name <span class="optional">(PDF only)</span></label>
+                            <textarea id="orgName" class="compact-textarea" rows="2" placeholder="e.g. octodemo" aria-describedby="orgNameHelp"></textarea>
+                            <div id="orgNameHelp" class="assist-text">Included in PDF header & filename if provided.</div>
+                        </div>
+                        <div class="control-item">
+                            <label for="userSearch">User Search</label>
+                            <input type="text" id="userSearch" placeholder="login contains…" aria-describedby="userSearchHelp" />
+                            <div id="userSearchHelp" class="assist-text">Case‑insensitive substring match on user login.</div>
+                        </div>
+                        <div class="control-item center-v">
+                            <label class="inline-checkbox" for="membersOnlyChk">
+                                <input type="checkbox" id="membersOnlyChk" />
+                                <span>Members only <span id="membersStatus" aria-live="polite" class="members-status">(none)</span></span>
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+                <details class="advanced-filters" id="advancedFilters">
+                    <summary><span class="summary-label">Date Range & Quick Ranges</span></summary>
+                    <div class="adv-content">
+                        <div class="date-row">
+                            <div class="control-item">
+                                <label for="dateFrom">From (day)</label>
+                                <input type="date" id="dateFrom" aria-describedby="dateRangeHelp" />
+                            </div>
+                            <div class="control-item">
+                                <label for="dateTo">To (day)</label>
+                                <input type="date" id="dateTo" aria-describedby="dateRangeHelp" />
+                            </div>
+                            <div class="quick-ranges" role="group" aria-label="Quick ranges">
+                                <button type="button" class="range-btn" data-range="7" aria-label="Last 7 days" aria-pressed="false">7d</button>
+                                <button type="button" class="range-btn" data-range="14" aria-label="Last 14 days" aria-pressed="false">14d</button>
+                                <button type="button" class="range-btn" data-range="28" aria-label="Last 28 days" aria-pressed="false">28d</button>
+                                <button type="button" class="range-btn" data-range="all" aria-label="All available days" aria-pressed="false">All</button>
+                            </div>
+                        </div>
+                        <div id="dateRangeHelp" class="assist-text">Select explicit dates or use quick range buttons above.</div>
+                    </div>
+                </details>
+                <div class="actions-row" role="group" aria-label="Filter actions">
+                    <button type="button" id="applyFiltersBtn" class="primary-action" disabled>Apply Filters</button>
+                    <button type="button" id="resetFiltersBtn" class="secondary">Reset</button>
+                    <button type="button" id="analyzeBtn" class="secondary">Load File</button>
+                    <button type="button" id="downloadPdfBtn" class="secondary" disabled aria-label="Download dashboard as PDF">Download PDF</button>
+                </div>
+            </form>
+            <div id="statusMessage" class="status" aria-live="polite"></div>
+        </section>
+
+        <section id="summaryMetrics" class="panel metrics-panel" role="region" aria-label="Summary metrics" aria-live="polite">
+            <!-- Filled dynamically -->
+        </section>
+
+        <section id="chartsSection" class="panel charts-panel" role="region" aria-label="Charts and visualizations">
+            <h2 class="panel-title">Visualizations</h2>
+            <div id="chartsContainer" class="charts-grid" aria-live="polite"></div>
+        </section>
+    </main>
+
+    <div id="loadingOverlay" class="loading-overlay" hidden role="status" aria-live="polite" aria-label="Processing data">
+        <div class="spinner"></div>
+        <div class="loading-text">Analyzing…</div>
+    </div>
+
+    <footer class="app-footer small-note">
+        <span>Metrics per GitHub Copilot export schema. This is a local-only viewer.</span>
+    </footer>
+
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/modules/heatmap.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <!-- Libraries for enhanced PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="script.js"></script>
+</body>
+</html>
