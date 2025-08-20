@@ -11,7 +11,9 @@ Optional: export a list of organization members (array or JSON Lines) containing
 This can be exported by clicking on Export > JSON button here. https://github.com/orgs/{org_name}/people
 
 ### 2. Open the dashboard
-Just open `index.html` in a modern desktop browser (Chrome, Edge, Firefox, Safari). You can double‑click the file or serve the folder with a simple local web server.
+Just open `index.html` in a modern desktop browser (Chrome, Edge, Firefox, Safari). You can double‑click the file or serve the folder with a simple local web server.\
+Or you can navigate to this URL. \
+https://abhi-singhs.github.io/copilot-metrics-analysis/
 
 ### 3. Load a metrics file
 1. Click “Upload Copilot Metrics JSON” and choose your export file.
