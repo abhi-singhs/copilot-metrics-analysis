@@ -54,6 +54,13 @@ header.app-header {
     z-index: 10;
 }
 
+/* Simple top navigation (Usage Guide link) */
+.top-nav { display:flex; align-items:center; }
+.top-nav .nav-list { list-style:none; display:flex; gap:1.1rem; margin:0; padding:0; }
+.top-nav a { color: var(--accent); font-size:.65rem; text-transform:uppercase; letter-spacing:.55px; font-weight:600; text-decoration:none; padding:.35rem .4rem; border-radius: var(--radius-sm); line-height:1; display:inline-block; }
+.top-nav a:hover, .top-nav a:focus-visible { text-decoration:underline; background: var(--bg-alt); outline: none; }
+.top-nav a:active { transform: translateY(1px); }
+
 .logo-title { display: flex; align-items: center; gap: .75rem; }
 .logo-title h1 { font-size: 1.25rem; margin: 0; font-weight: 600; letter-spacing: .5px; }
 .badge { background: var(--gradient-accent); color: #fff; padding: .25rem .6rem; font-size: .65rem; border-radius: 999px; text-transform: uppercase; letter-spacing: .5px; }
