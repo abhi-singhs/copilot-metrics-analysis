@@ -44,11 +44,24 @@ Summary cards show totals (active users, interactions, completions, acceptances,
 * Heatmaps (Language × Model, Feature × Model)
 * Daily and weekly active users
 
+#### NEW: Per-User Usage Table & CSV Export
+Click the "User Usage Table" button (enabled after loading data) to view a sortable table of aggregated metrics per user:
+* Interactions, completions, acceptances, acceptance %
+* Distinct active days
+* Top model, language, and feature (based on interaction counts)
+
+You can:
+* Click column headers to sort ascending/descending.
+* Export the current (filtered) per-user aggregations to CSV via the "Export CSV" button inside the table view.
+* Use existing filters (date range, user search, members only) then open or refresh the table; it always reflects current filters.
+* Click "Back to Dashboard" to return to the charts.
+
 Hover any chart element for tooltips. Categories auto‑trim if extremely long to preserve readability.
 
 ### 6. Generate a PDF report
 1. (Optional) Enter Enterprise Name and/or Organization Name (used only for labeling the PDF and filename).
 2. Click “Download PDF” after data loads. A multi‑page PDF (summary grid + each chart) is generated entirely in your browser.
+3. (Optional) If you need raw per-user detail, use the CSV export from the User Usage Table (not included in the PDF) for further spreadsheet analysis.
 
 ### 7. Privacy & local‑only behavior
 * Files are read with the File API; contents are not sent elsewhere.

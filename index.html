@@ -84,6 +84,7 @@
                     <button type="button" id="resetFiltersBtn" class="secondary">Reset</button>
                     <button type="button" id="analyzeBtn" class="secondary">Load File</button>
                     <button type="button" id="downloadPdfBtn" class="secondary" disabled aria-label="Download dashboard as PDF">Download PDF</button>
+                    <button type="button" id="userUsageBtn" class="secondary" disabled aria-label="View per-user usage table">User Usage Table</button>
                 </div>
             </form>
             <div id="statusMessage" class="status" aria-live="polite"></div>
@@ -96,6 +97,23 @@
         <section id="chartsSection" class="panel charts-panel" role="region" aria-label="Charts and visualizations">
             <h2 class="panel-title">Visualizations</h2>
             <div id="chartsContainer" class="charts-grid" aria-live="polite"></div>
+        </section>
+
+        <section id="userUsageSection" class="panel" role="region" aria-label="Per-user usage table" hidden>
+            <div class="user-usage-header">
+                <h2 class="panel-title">Per-User Usage</h2>
+                <div class="user-usage-actions">
+                    <button type="button" id="exportUsersCsvBtn" class="secondary" disabled aria-label="Export per-user usage as CSV">Export CSV</button>
+                    <button type="button" id="backToDashboardBtn" class="secondary" aria-label="Return to charts dashboard">Back to Dashboard</button>
+                </div>
+            </div>
+            <p class="small-note" id="userUsageNote">Aggregated metrics per user based on current filters. Click a column header to sort. Large tables scroll horizontally on small screens.</p>
+            <div class="user-table-wrapper" tabindex="0">
+                <table id="userUsageTable" class="usage-table" aria-describedby="userUsageNote">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </section>
     </main>
 

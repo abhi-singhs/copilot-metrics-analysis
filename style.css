@@ -181,6 +181,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); }
 
 .chart-container canvas { width: 100% !important; height: 100% !important; aspect-ratio: 4/3; }
 
+/* User usage table */
+.user-usage-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.user-usage-actions { display:flex; gap:.5rem; }
+.user-table-wrapper { max-height: 70vh; overflow:auto; border:1px solid var(--panel-border); border-radius: var(--radius); background: var(--bg-alt); }
+table.usage-table { border-collapse: collapse; width: 100%; font-size: .75rem; }
+table.usage-table thead { position: sticky; top:0; background: var(--bg-alt); box-shadow: 0 2px 0 var(--panel-border); z-index:2; }
+table.usage-table th, table.usage-table td { padding: .45rem .55rem; text-align: right; border-bottom: 1px solid var(--panel-border); white-space: nowrap; }
+table.usage-table th:first-child, table.usage-table td:first-child { text-align: left; position: sticky; left:0; background: var(--bg-alt); z-index:1; }
+table.usage-table tbody tr:hover { background: rgba(0,0,0,.04); }
+table.usage-table th.sortable { cursor: pointer; user-select: none; }
+table.usage-table th.sortable:after { content: '\25B4\25BE'; font-size: .55rem; opacity:.35; margin-left:.25rem; }
+table.usage-table th.sort-asc:after { content: '\25B4'; opacity: .9; }
+table.usage-table th.sort-desc:after { content: '\25BE'; opacity: .9; }
+@media (prefers-color-scheme: light) {
+    table.usage-table tbody tr:hover { background: rgba(0,0,0,.05); }
+}
+@media (max-width: 900px) { table.usage-table th, table.usage-table td { font-size: .65rem; } }
+
 .loading-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(0,0,0,.55); backdrop-filter: blur(4px); z-index: 100; }
 .spinner { width: 48px; height: 48px; border: 5px solid rgba(255,255,255,.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

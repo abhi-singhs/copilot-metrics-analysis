@@ -93,6 +93,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (membersInputEl) {
         membersInputEl.addEventListener('change', () => membersInputEl.files && handleMembersFile(membersInputEl.files[0]));
     }
+
+    // Per-user usage view navigation & export
+    const userUsageBtn = document.getElementById('userUsageBtn');
+    const backBtn = document.getElementById('backToDashboardBtn');
+    const exportUsersCsvBtn = document.getElementById('exportUsersCsvBtn');
+    if (userUsageBtn) {
+        userUsageBtn.addEventListener('click', () => {
+            buildUserUsageTable(window.__currentFilteredData || window.__rawData || []);
+            toggleUserUsage(true);
+        });
+    }
+    if (backBtn) {
+        backBtn.addEventListener('click', () => toggleUserUsage(false));
+    }
+    if (exportUsersCsvBtn) {
+        exportUsersCsvBtn.addEventListener('click', () => exportUserUsageCsv());
+    }
 });
 
 function parseUploadedText(text) {
@@ -693,6 +710,8 @@ function initializeFilters(data) {
 
     enableApplyButton();
     setupQuickRangeButtons();
+    // Cache initial dataset for user usage table reuse
+    window.__currentFilteredData = data;
 }
 
 function applyFilters() {
@@ -715,6 +734,12 @@ function applyFilters() {
     }
     computeSummaryMetrics(filtered);
     analyzeData(filtered);
+    // Cache for user usage table & update if visible
+    window.__currentFilteredData = filtered;
+    const userUsageSection = document.getElementById('userUsageSection');
+    if (userUsageSection && !userUsageSection.hidden) {
+        buildUserUsageTable(filtered);
+    }
 }
 
 function enableApplyButton() {
@@ -838,6 +863,8 @@ function showLoading(show) {
 function enableDownloadButton() {
     const btn = document.getElementById('downloadPdfBtn');
     if (btn) btn.disabled = false;
+    const uBtn = document.getElementById('userUsageBtn');
+    if (uBtn) uBtn.disabled = false;
 }
 
 function escapeHtml(str) {
@@ -1050,4 +1077,181 @@ async function generatePdfReport() {
     } finally {
         if (downloadBtn) downloadBtn.disabled = false;
     }
+}
+
+// ================= Per-User Usage Table & CSV Export ================= //
+let userUsageSort = { key: 'user_login', dir: 'asc' };
+
+function toggleUserUsage(show) {
+    const section = document.getElementById('userUsageSection');
+    const chartsSec = document.getElementById('chartsSection');
+    if (!section || !chartsSec) return;
+    section.hidden = !show;
+    chartsSec.hidden = show;
+    if (show) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('exportUsersCsvBtn')?.removeAttribute('disabled');
+    } else {
+        chartsSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function aggregateUserUsage(data) {
+    const map = new Map();
+    data.forEach(r => {
+        const login = r.user_login || '(unknown)';
+        if (!map.has(login)) {
+            map.set(login, {
+                user_login: login,
+                user_id: r.user_id,
+                interactions: 0,
+                completions: 0,
+                acceptances: 0,
+                acceptance_rate: 0,
+                days_active: new Set(),
+                models: {},
+                languages: {},
+                features: {}
+            });
+        }
+        const row = map.get(login);
+        row.interactions += (r.user_initiated_interaction_count || 0);
+        row.completions += (r.code_generation_activity_count || 0);
+        row.acceptances += (r.code_acceptance_activity_count || 0);
+        if (r.day) row.days_active.add(r.day);
+        if (r.totals_by_model_feature) {
+            r.totals_by_model_feature.forEach(mf => {
+                const m = mf.model || 'unknown';
+                row.models[m] = (row.models[m] || 0) + (mf.user_initiated_interaction_count || 0);
+            });
+        }
+        if (r.totals_by_language_feature) {
+            r.totals_by_language_feature.forEach(lf => {
+                const lang = lf.language || 'unknown';
+                const val = (lf.user_initiated_interaction_count || lf.code_generation_activity_count || 0);
+                row.languages[lang] = (row.languages[lang] || 0) + val;
+            });
+        }
+        if (r.totals_by_feature) {
+            r.totals_by_feature.forEach(f => {
+                const feat = f.feature || 'unknown';
+                row.features[feat] = (row.features[feat] || 0) + (f.user_initiated_interaction_count || 0);
+            });
+        }
+    });
+    const rows = Array.from(map.values()).map(r => {
+        r.acceptance_rate = r.completions ? (r.acceptances / r.completions * 100) : 0;
+        r.days_active_count = r.days_active.size;
+        r.top_model = topKey(r.models);
+        r.top_language = topKey(r.languages);
+        r.top_feature = formatFeatureName(topKey(r.features));
+        return r;
+    });
+    return rows;
+}
+
+function topKey(obj) {
+    const entries = Object.entries(obj || {});
+    if (!entries.length) return '';
+    entries.sort((a,b)=>b[1]-a[1]);
+    return entries[0][0];
+}
+
+function buildUserUsageTable(data) {
+    const table = document.getElementById('userUsageTable');
+    if (!table) return;
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    const rows = aggregateUserUsage(data);
+    window.__userUsageRows = rows;
+    // Build head
+    thead.innerHTML = '';
+    const headers = [
+        { key: 'user_login', label: 'User' },
+        { key: 'interactions', label: 'Interactions' },
+        { key: 'completions', label: 'Completions' },
+        { key: 'acceptances', label: 'Acceptances' },
+        { key: 'acceptance_rate', label: 'Acceptance %' },
+        { key: 'days_active_count', label: 'Days Active' },
+        { key: 'top_model', label: 'Top Model' },
+        { key: 'top_language', label: 'Top Language' },
+        { key: 'top_feature', label: 'Top Feature' }
+    ];
+    const tr = document.createElement('tr');
+    headers.forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h.label;
+        th.dataset.key = h.key;
+        th.scope = 'col';
+        th.classList.add('sortable');
+        if (h.key === userUsageSort.key) th.classList.add(userUsageSort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+        th.addEventListener('click', () => {
+            if (userUsageSort.key === h.key) {
+                userUsageSort.dir = userUsageSort.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                userUsageSort.key = h.key; userUsageSort.dir = 'asc';
+            }
+            renderUserUsageRows();
+        });
+        tr.appendChild(th);
+    });
+    thead.appendChild(tr);
+    renderUserUsageRows();
+
+    function renderUserUsageRows() {
+        const key = userUsageSort.key; const dir = userUsageSort.dir === 'asc' ? 1 : -1;
+        rows.sort((a,b) => {
+            const va = a[key]; const vb = b[key];
+            if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+            return String(va).localeCompare(String(vb), undefined, { sensitivity: 'base' }) * dir;
+        });
+        tbody.innerHTML = rows.map(r => `<tr>
+            <td>${escapeHtml(r.user_login)}</td>
+            <td>${r.interactions}</td>
+            <td>${r.completions}</td>
+            <td>${r.acceptances}</td>
+            <td>${r.acceptance_rate.toFixed(1)}</td>
+            <td>${r.days_active_count}</td>
+            <td>${escapeHtml(r.top_model)}</td>
+            <td>${escapeHtml(r.top_language)}</td>
+            <td>${escapeHtml(r.top_feature)}</td>
+        </tr>`).join('');
+        table.querySelectorAll('th').forEach(th => { th.classList.remove('sort-asc','sort-desc'); if (th.dataset.key === key) th.classList.add(dir === 1 ? 'sort-asc' : 'sort-desc'); });
+    }
+}
+
+function exportUserUsageCsv() {
+    const rows = window.__userUsageRows || aggregateUserUsage(window.__currentFilteredData || window.__rawData || []);
+    if (!rows.length) { alert('No rows to export'); return; }
+    const header = ['user_login','user_id','interactions','completions','acceptances','acceptance_rate','days_active','top_model','top_language','top_feature'];
+    const lines = [header.join(',')];
+    rows.forEach(r => {
+        const vals = [
+            r.user_login,
+            r.user_id,
+            r.interactions,
+            r.completions,
+            r.acceptances,
+            r.acceptance_rate.toFixed(2),
+            r.days_active_count,
+            r.top_model,
+            r.top_language,
+            r.top_feature
+        ].map(v => csvEscape(v));
+        lines.push(vals.join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().substring(0,10);
+    a.href = url; a.download = `copilot-user-usage-${dateStr}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function csvEscape(val) {
+    if (val === null || val === undefined) return '';
+    const s = String(val);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+    return s;
 }
