@@ -80,7 +80,7 @@ The dashboard now supports two data sources:
 Screenshots:
 ![Initial dashboard awaiting upload](img/initial-state.png)
 ---
-![Filters panel with date range expanded](img/filters-expanded.png)
+![Initial dashboard with GitHub API](img/Initital-state-API.png)
 ---
 ![Example](img/example.png)
 ---
