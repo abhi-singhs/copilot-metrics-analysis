@@ -19,19 +19,16 @@
     </header>
     <main id="mainContent" tabindex="-1">
     <section class="panel controls-panel" role="region" aria-label="Filters and data controls">
-            <p class="small-note">Upload a GitHub Copilot enterprise export or fetch data directly from GitHub APIs.</p>
+            <p class="small-note">Upload a GitHub Copilot metrics export. (Optional) Use GitHub API just to fetch organization members for filtering.</p>
             <form id="filtersForm" class="filters-form" novalidate>
                 <fieldset class="data-group">
                     <legend class="visually-hidden">Data Sources</legend>
-                    <div class="data-source-toggle" role="group" aria-label="Data source selection">
-                        <label class="toggle-option">
-                            <input type="radio" name="dataSource" value="file" id="dataSourceFile" checked />
-                            <span>Upload File</span>
+                    <div class="control-item" style="grid-column: 1 / -1;">
+                        <label class="inline-checkbox" for="apiMembersToggle">
+                            <input type="checkbox" id="apiMembersToggle" />
+                            <span>Fetch organization members via GitHub API <span class="optional">(optional)</span></span>
                         </label>
-                        <label class="toggle-option">
-                            <input type="radio" name="dataSource" value="api" id="dataSourceApi" />
-                            <span>GitHub API</span>
-                        </label>
+                        <div class="assist-text">Leave unchecked to manually upload a members JSON file. When enabled, enter PAT + org name then click "Fetch Members".</div>
                     </div>
                     <div class="controls-grid">
                         <div class="control-item file-picker" id="metricsFileWrap">
@@ -42,14 +39,14 @@
                         <div class="control-item api-input" id="githubPatWrap" style="display: none;">
                             <label for="githubPat">GitHub Personal Access Token<span class="req-indicator" aria-hidden="true">*</span></label>
                             <input type="password" id="githubPat" placeholder="ghp_..." aria-describedby="githubPatHelp" />
-                            <div id="githubPatHelp" class="assist-text">Required for accessing GitHub APIs. Token needs 'read:org' and 'copilot_metrics:read' scopes.</div>
+                            <div id="githubPatHelp" class="assist-text">Optional: only needed to fetch org members. Scope: <code>read:org</code>.</div>
                         </div>
                         <div class="control-item api-input" id="orgNameApiWrap" style="display: none;">
                             <label for="orgNameApi">Organization Name<span class="req-indicator" aria-hidden="true">*</span></label>
-                            <input type="text" id="orgNameApi" placeholder="e.g. github, microsoft" aria-describedby="orgNameApiHelp" />
-                            <div id="orgNameApiHelp" class="assist-text">GitHub organization name to fetch metrics and members for.</div>
+                            <input type="text" id="orgNameApi" placeholder="e.g. github" aria-describedby="orgNameApiHelp" />
+                            <div id="orgNameApiHelp" class="assist-text">Organization whose members you want to load for filtering (no metrics fetched via API).</div>
                         </div>
-                        <div class="control-item file-picker">
+                        <div class="control-item file-picker" id="membersFileWrapper">
                             <label for="membersFileInput">Upload Org Members JSON <span class="optional">(optional)</span></label>
                             <input type="file" id="membersFileInput" accept=".json,.jsonl,.ndjson,.txt,application/json" aria-describedby="membersFileHelp" />
                             <div id="membersFileHelp" class="assist-text">Array / JSON Lines containing objects with a <code>login</code> field.</div>
@@ -103,7 +100,7 @@
                     <button type="button" id="applyFiltersBtn" class="primary-action" disabled>Apply Filters</button>
                     <button type="button" id="resetFiltersBtn" class="secondary">Reset</button>
                     <button type="button" id="analyzeBtn" class="secondary">Load File</button>
-                    <button type="button" id="fetchApiBtn" class="secondary" style="display: none;">Fetch from API</button>
+                    <button type="button" id="fetchApiBtn" class="secondary" style="display: none;">Fetch Members</button>
                     <button type="button" id="downloadPdfBtn" class="secondary" disabled aria-label="Download dashboard as PDF">Download PDF</button>
                     <button type="button" id="userUsageBtn" class="secondary" disabled aria-label="View per-user usage table">User Usage Table</button>
                 </div>

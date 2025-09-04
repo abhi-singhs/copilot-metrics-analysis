@@ -3,7 +3,21 @@ window.addEventListener('load', () => {
     setupHighchartsTheme();
     setStatus('Awaiting upload…');
     renderPlaceholders();
+    warnIfFileOrigin();
 });
+
+function warnIfFileOrigin() {
+    try {
+        if (location.protocol === 'file:') {
+            const msg = 'Running from file:// origin. Some report downloads may fail due to CORS. Serve locally (e.g. python3 -m http.server) to avoid CORS issues.';
+            console.warn('[cors]', msg);
+            const status = document.getElementById('statusMessage');
+            if (status && !status.textContent.includes('CORS')) {
+                status.textContent = msg;
+            }
+        }
+    } catch (_) { /* ignore */ }
+}
 
 function setupHighchartsTheme() {
     if (typeof Highcharts === 'undefined') return;
@@ -68,11 +82,12 @@ document.addEventListener('DOMContentLoaded', () => {
     analyzeBtnEl = document.getElementById('analyzeBtn');
     fetchApiBtnEl = document.getElementById('fetchApiBtn');
     
-    // Data source toggle handling
-    const dataSourceRadios = document.querySelectorAll('input[name="dataSource"]');
-    dataSourceRadios.forEach(radio => {
-        radio.addEventListener('change', handleDataSourceChange);
-    });
+    // API members toggle handling
+    const apiToggle = document.getElementById('apiMembersToggle');
+    if (apiToggle) {
+        apiToggle.addEventListener('change', handleApiToggleChange);
+        handleApiToggleChange();
+    }
     
     if (analyzeBtnEl) {
         analyzeBtnEl.addEventListener('click', () => handleFileSelection(fileInputEl && fileInputEl.files[0]));
@@ -177,79 +192,37 @@ function handleFileSelection(file) {
 }
 
 // --- Data source toggle handling ---
-function handleDataSourceChange() {
-    const selectedSource = document.querySelector('input[name="dataSource"]:checked').value;
-    const fileControls = document.querySelectorAll('.file-picker');
+function handleApiToggleChange() {
+    const enabled = document.getElementById('apiMembersToggle')?.checked;
     const apiControls = document.querySelectorAll('.api-input');
-    const analyzeBtn = document.getElementById('analyzeBtn');
     const fetchBtn = document.getElementById('fetchApiBtn');
-    
-    if (selectedSource === 'file') {
-        fileControls.forEach(el => el.style.display = 'flex');
-        apiControls.forEach(el => el.style.display = 'none');
-        analyzeBtn.style.display = 'inline-flex';
-        fetchBtn.style.display = 'none';
-    } else {
-        fileControls.forEach(el => el.style.display = 'none');
-        apiControls.forEach(el => el.style.display = 'flex');
-        analyzeBtn.style.display = 'none';
-        fetchBtn.style.display = 'inline-flex';
-    }
+    apiControls.forEach(el => el.style.display = enabled ? 'flex' : 'none');
+    if (fetchBtn) fetchBtn.style.display = enabled ? 'inline-flex' : 'none';
+    const membersFileWrapper = document.getElementById('membersFileWrapper');
+    if (membersFileWrapper) membersFileWrapper.style.display = enabled ? 'none' : 'flex';
 }
 
-// --- GitHub API integration ---
+// --- GitHub API (members only) ---
 async function handleApiDataFetch() {
     const pat = document.getElementById('githubPat').value.trim();
-    const orgName = document.getElementById('orgNameApi').value.trim();
-    
-    if (!pat) {
-        setStatus('GitHub Personal Access Token is required for API access.', true);
-        return;
-    }
-    
-    if (!orgName) {
-        setStatus('Organization name is required for API access.', true);
-        return;
-    }
-    
+    const org = document.getElementById('orgNameApi').value.trim();
+    if (!pat) { setStatus('PAT required to fetch members.', true); return; }
+    if (!org) { setStatus('Organization name required.', true); return; }
     showLoading(true);
-    setStatus('Fetching data from GitHub APIs...');
-    
+    setStatus('Fetching organization members…');
     try {
-        // Fetch organization members and metrics in parallel
-        const [membersData, metricsData] = await Promise.all([
-            fetchOrganizationMembers(pat, orgName),
-            fetchCopilotMetrics(pat, orgName)
-        ]);
-        
-        // Store members data if available
-        if (membersData && membersData.length) {
-            const logins = new Set();
-            membersData.forEach(member => {
-                if (member.login) logins.add(member.login.toLowerCase());
-            });
-            window.__membersSet = logins;
-            updateMembersStatus();
-        }
-        
-        // Process metrics data
-        if (!metricsData || !metricsData.length) {
-            throw new Error('No metrics data returned from API.');
-        }
-        
-        window.__rawData = metricsData;
-        initializeFilters(metricsData);
-        analyzeData(metricsData);
-        setStatus(`Loaded ${metricsData.length} metrics records and ${membersData?.length || 0} members from GitHub API`);
-        enableDownloadButton();
-        
+        const members = await fetchOrganizationMembers(pat, org);
+        if (!members.length) throw new Error('No members returned.');
+        const logins = new Set(); members.forEach(m => { if (m.login) logins.add(m.login.toLowerCase()); });
+        window.__membersSet = logins;
+        updateMembersStatus();
+        setStatus(`Loaded ${logins.size} members. Upload or re-upload metrics file to filter.`);
+        if (document.getElementById('membersOnlyChk')?.checked && window.__rawData) applyFilters();
     } catch (err) {
-        console.error('API fetch error:', err);
-        setStatus(`API fetch failed: ${err.message}`, true);
-        alert('Failed to fetch data from GitHub API: ' + err.message);
-    } finally {
-        showLoading(false);
-    }
+        console.error('Members fetch error:', err);
+        setStatus(`Members fetch failed: ${err.message}`, true);
+        alert('Members fetch failed: ' + err.message);
+    } finally { showLoading(false); }
 }
 
 async function fetchOrganizationMembers(pat, orgName) {
@@ -274,81 +247,7 @@ async function fetchOrganizationMembers(pat, orgName) {
     return await response.json();
 }
 
-async function fetchCopilotMetrics(pat, orgName) {
-    // First try organization-level metrics
-    let response = await fetch(`https://api.github.com/orgs/${orgName}/copilot/usage`, {
-        headers: {
-            'Authorization': `Bearer ${pat}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'X-GitHub-Api-Version': '2022-11-28'
-        }
-    });
-    
-    if (!response.ok) {
-        if (response.status === 401) {
-            throw new Error('Invalid GitHub token or insufficient permissions. Token needs "copilot:read" or "manage_billing:copilot" scope.');
-        } else if (response.status === 404) {
-            throw new Error(`Copilot metrics not found for organization "${orgName}". Ensure the org has Copilot enabled and your token has the right permissions.`);
-        } else if (response.status === 403) {
-            throw new Error('Access denied. Token needs "copilot:read" or "manage_billing:copilot" scope for Copilot metrics.');
-        } else {
-            throw new Error(`Copilot API error: ${response.status} ${response.statusText}`);
-        }
-    }
-    
-    const data = await response.json();
-    
-    // Transform the API response to match the expected format
-    // The Copilot API returns usage data in a different structure than the file exports
-    // We need to normalize it to match the expected schema
-    return normalizeApiData(data);
-}
-
-function normalizeApiData(apiData) {
-    // Transform GitHub Copilot API response to match the expected file format
-    // The API typically returns data in a different structure than exports
-    
-    if (!apiData) return [];
-    
-    // If it's already an array (like what we expect), return as-is
-    if (Array.isArray(apiData)) {
-        return apiData;
-    }
-    
-    // If it has a breakdown by day, transform it
-    if (apiData.breakdown) {
-        return apiData.breakdown.map(dayData => ({
-            day: dayData.date,
-            user_id: dayData.editor || 'unknown',
-            user_login: dayData.editor || 'unknown',
-            user_initiated_interaction_count: dayData.suggestions_count || 0,
-            code_generation_activity_count: dayData.acceptances_count || 0,
-            code_acceptance_activity_count: dayData.lines_accepted || 0,
-            // Add other fields as needed based on API response
-            totals_by_language_feature: dayData.languages?.map(lang => ({
-                language: lang.name,
-                code_generation_activity_count: lang.suggestions_count || 0,
-                user_initiated_interaction_count: lang.suggestions_count || 0
-            })) || [],
-            totals_by_feature: [{
-                feature: 'code_completion',
-                user_initiated_interaction_count: dayData.suggestions_count || 0
-            }],
-            totals_by_model_feature: [{
-                model: 'unknown',
-                feature: 'code_completion',
-                user_initiated_interaction_count: dayData.suggestions_count || 0
-            }],
-            totals_by_ide: dayData.editors?.map(editor => ({
-                ide: editor.name,
-                code_acceptance_activity_count: editor.acceptances_count || 0
-            })) || []
-        }));
-    }
-    
-    // If it's a single object, wrap it in an array
-    return [apiData];
-}
+// Removed legacy fetchCopilotMetrics / normalizeApiData in favor of report-based ingestion.
 
 // --- Members file handling (org members export) ---
 function handleMembersFile(file) {

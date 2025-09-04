@@ -4,11 +4,12 @@ This is a local, client‑side dashboard for exploring GitHub Copilot Enterprise
 
 ### Quick Start Options
 
-#### Option 1: GitHub API Integration (Recommended)
-1. Get a GitHub Personal Access Token with required scopes
-2. Open the dashboard and select "GitHub API" mode
-3. Enter your PAT and organization name
-4. Click "Fetch from API" to load live data
+#### Option 1: Upload + (Optional) API Members Fetch (Recommended Hybrid)
+1. Export a Copilot metrics JSON/JSONL file (enterprise or org export)
+2. (Optional) Create a PAT with `read:org` scope if you want automatic member list
+3. Upload the metrics file
+4. (Optional) Enable the "Fetch organization members via GitHub API" checkbox
+5. Enter PAT + Organization name then click "Fetch Members" (only members are fetched; metrics stay local)
 
 #### Option 2: File Upload
 1. Export your Copilot metrics from GitHub
@@ -22,25 +23,26 @@ This is a local, client‑side dashboard for exploring GitHub Copilot Enterprise
 
 #### Using GitHub API Integration
 
-**Step 1: Create GitHub Personal Access Token**
-Create a GitHub PAT with these required scopes:
-- `read:org` - To fetch organization members
-- `copilot_metrics:read` or `manage_billing:copilot` - To access Copilot metrics
+Hybrid mode: The dashboard no longer downloads metrics via API. You always provide the metrics export file. The GitHub API (if used) is only for retrieving the organization member list to enable the “Members only” filter.
+
+**Step 1 (Optional): Create GitHub Personal Access Token**
+Scope: `read:org` (only needed if you want to auto‑fetch members; otherwise skip.)
 
 **Step 2: Access the Dashboard**
-Open `index.html` in a modern desktop browser or navigate to: https://abhi-singhs.github.io/copilot-metrics-analysis/
+Open `index.html` locally or visit: https://abhi-singhs.github.io/copilot-metrics-analysis/
 
-**Step 3: Configure API Access**
-1. Select the "GitHub API" tab in the data source toggle
-2. Enter your GitHub Personal Access Token
-3. Enter your organization name (e.g., `github`, `microsoft`)
-4. Click "Fetch from API"
+**Step 3: Upload Metrics File**
+Upload your Copilot metrics export JSON/JSONL.
 
-The system will automatically:
-- Fetch Copilot usage metrics for your organization
-- Retrieve organization members list
-- Enable the "Members only" filter
-- Load all data into the dashboard for analysis
+**Step 4 (Optional): Fetch Members**
+Check the API members toggle, enter PAT + Organization name, click "Fetch Members". Members load; enable the “Members only” filter.
+
+**What happens under the hood (members fetch)**
+1. Calls `GET /orgs/{org}/members` to build a Set of logins
+2. Updates UI with member count
+3. If “Members only” is checked, filters currently loaded metrics immediately
+
+**Telemetry requirement (general)**: Users must have IDE telemetry enabled for their activity to appear in exported metrics.
 
 #### Using File Uploads (Traditional Method)
 
@@ -49,8 +51,7 @@ Export your Copilot metrics (enterprise or organization scope) from GitHub.
 This can be exported by clicking on download button here. https://github.com/enterprises/{enterprise_slug}/insights/copilot
 
 
-Optional: export a list of organization members (array or JSON Lines) containing a `login` (or `user_login` / `name`) field to enable the “Members only” filter.
-This can be exported by clicking on Export > JSON button here. https://github.com/orgs/{org_name}/people
+Optional (file mode only): export a list of organization members (array or JSON Lines) containing a `login` field to enable the “Members only” filter.
 
 ### 2. Open the dashboard
 Just open `index.html` in a modern desktop browser (Chrome, Edge, Firefox, Safari). You can double‑click the file or serve the folder with a simple local web server.\
@@ -60,11 +61,10 @@ https://abhi-singhs.github.io/copilot-metrics-analysis/
 ### 3. Choose your data source
 The dashboard now supports two data sources:
 
-**GitHub API (Live Data):**
-- Real-time metrics directly from GitHub
-- Automatic organization members fetching
-- Requires GitHub Personal Access Token
-- No file downloads needed
+**GitHub API (Hybrid Members Fetch Only):**
+- Does NOT download metrics
+- Optional convenience to load org members list
+- Requires only `read:org` scope
 
 **File Upload (Traditional):**
 - Use exported JSON/JSONL files
@@ -116,7 +116,7 @@ You can:
 Hover any chart element for tooltips. Categories auto‑trim if extremely long to preserve readability.
 
 ### 6. Generate a PDF report
-1. (Optional) Enter Enterprise Name and/or Organization Name (used only for labeling the PDF and filename).
+1. (Optional) Enter Enterprise Name and/or Organization Name (for labeling only; not used for API fetch now).
 2. Click “Download PDF” after data loads. A multi‑page PDF (summary grid + each chart) is generated entirely in your browser.
 3. (Optional) If you need raw per-user detail, use the CSV export from the User Usage Table (not included in the PDF) for further spreadsheet analysis.
 
@@ -153,25 +153,24 @@ Modern browsers handle several MB. Extremely large exports may slow rendering—
 ---
 For feature ideas or adjustments, edit `script.js` or `style.css` — no build step required.
 
-## GitHub API Integration
+## GitHub API (Members Only) Integration
 
-### Required Token Scopes
-- `read:org` - Access organization member list  
-- `copilot_metrics:read` or `manage_billing:copilot` - Access Copilot usage metrics
+### Required Token Scope
+`read:org` – to list organization members.
 
-### API Endpoints Used
-- `GET /orgs/{org}/members` - Fetch organization members
-- `GET /orgs/{org}/copilot/usage` - Fetch Copilot metrics
+### Endpoint Used
+`GET /orgs/{org}/members`
 
-### Troubleshooting API Issues
-- **"Invalid GitHub token"**: Verify token and required scopes
-- **"Organization not found"**: Check spelling and access permissions  
-- **"Copilot metrics not found"**: Ensure org has Copilot enabled and you have billing access
-- **Rate limiting**: GitHub API has rate limits; try again after a few minutes
-- **Network errors**: Check internet connection and GitHub status
+### Troubleshooting
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| 401 Unauthorized | Missing/invalid PAT | Recreate PAT with `read:org` |
+| 403 Forbidden | Insufficient rights to view members | Use a user with org membership / admin rights |
+| 404 Not Found | Wrong org name or private org w/o access | Verify org name and membership |
+| Members only disabled | No members loaded yet | Fetch members or upload members file |
 
 ### Security Notes
-- GitHub PAT is only used for API requests and never stored
-- All data processing happens entirely in your browser
-- No metrics data is sent to third-party servers
+* PAT never stored; used only for the single members request.
+* Metrics JSON stays fully local (uploaded file only).
+* No external metrics endpoints are called.
 
