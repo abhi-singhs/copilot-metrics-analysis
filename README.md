@@ -1,6 +1,48 @@
 ## GitHub Copilot Metrics Analyzer – Usage Guide
 
-This is a local, client‑side dashboard for exploring GitHub Copilot Enterprise usage exports. No data is uploaded to a server: everything stays in your browser.
+This is a local, client‑side dashboard for exploring GitHub Copilot Enterprise usage exports. It supports both **local file uploads** and **direct GitHub API integration**. No data is uploaded to a server: everything stays in your browser.
+
+### Quick Start Options
+
+#### Option 1: GitHub API Integration (Recommended)
+1. Get a GitHub Personal Access Token with required scopes
+2. Open the dashboard and select "GitHub API" mode
+3. Enter your PAT and organization name
+4. Click "Fetch from API" to load live data
+
+#### Option 2: File Upload
+1. Export your Copilot metrics from GitHub
+2. Open the dashboard and select "Upload File" mode  
+3. Upload your JSON/JSONL export file
+4. Optionally upload organization members file
+
+---
+
+### Detailed Instructions
+
+#### Using GitHub API Integration
+
+**Step 1: Create GitHub Personal Access Token**
+Create a GitHub PAT with these required scopes:
+- `read:org` - To fetch organization members
+- `copilot_metrics:read` or `manage_billing:copilot` - To access Copilot metrics
+
+**Step 2: Access the Dashboard**
+Open `index.html` in a modern desktop browser or navigate to: https://abhi-singhs.github.io/copilot-metrics-analysis/
+
+**Step 3: Configure API Access**
+1. Select the "GitHub API" tab in the data source toggle
+2. Enter your GitHub Personal Access Token
+3. Enter your organization name (e.g., `github`, `microsoft`)
+4. Click "Fetch from API"
+
+The system will automatically:
+- Fetch Copilot usage metrics for your organization
+- Retrieve organization members list
+- Enable the "Members only" filter
+- Load all data into the dashboard for analysis
+
+#### Using File Uploads (Traditional Method)
 
 ### 1. Prepare your data
 Export your Copilot metrics (enterprise or organization scope) from GitHub.
@@ -15,7 +57,22 @@ Just open `index.html` in a modern desktop browser (Chrome, Edge, Firefox, Safar
 Or you can navigate to this URL. \
 https://abhi-singhs.github.io/copilot-metrics-analysis/
 
-### 3. Load a metrics file
+### 3. Choose your data source
+The dashboard now supports two data sources:
+
+**GitHub API (Live Data):**
+- Real-time metrics directly from GitHub
+- Automatic organization members fetching
+- Requires GitHub Personal Access Token
+- No file downloads needed
+
+**File Upload (Traditional):**
+- Use exported JSON/JSONL files
+- Works offline
+- Manual members file upload if needed
+- Full control over data scope
+
+### 4. Load data
 1. Click “Upload Copilot Metrics JSON” and choose your export file.
 2. The status message will show progress; once parsed, summary metric cards and charts render automatically.
 3. (Optional) Upload the members file to activate the “Members only” checkbox.
@@ -95,4 +152,26 @@ Modern browsers handle several MB. Extremely large exports may slow rendering—
 
 ---
 For feature ideas or adjustments, edit `script.js` or `style.css` — no build step required.
+
+## GitHub API Integration
+
+### Required Token Scopes
+- `read:org` - Access organization member list  
+- `copilot_metrics:read` or `manage_billing:copilot` - Access Copilot usage metrics
+
+### API Endpoints Used
+- `GET /orgs/{org}/members` - Fetch organization members
+- `GET /orgs/{org}/copilot/usage` - Fetch Copilot metrics
+
+### Troubleshooting API Issues
+- **"Invalid GitHub token"**: Verify token and required scopes
+- **"Organization not found"**: Check spelling and access permissions  
+- **"Copilot metrics not found"**: Ensure org has Copilot enabled and you have billing access
+- **Rate limiting**: GitHub API has rate limits; try again after a few minutes
+- **Network errors**: Check internet connection and GitHub status
+
+### Security Notes
+- GitHub PAT is only used for API requests and never stored
+- All data processing happens entirely in your browser
+- No metrics data is sent to third-party servers
 
