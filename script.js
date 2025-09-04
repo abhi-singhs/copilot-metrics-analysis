@@ -62,12 +62,23 @@ function setupHighchartsTheme() {
 }
 
 // Enhanced manual file selection & parsing (supports JSON array or JSONL)
-let fileInputEl, analyzeBtnEl;
+let fileInputEl, analyzeBtnEl, fetchApiBtnEl;
 document.addEventListener('DOMContentLoaded', () => {
     fileInputEl = document.getElementById('jsonFileInput');
     analyzeBtnEl = document.getElementById('analyzeBtn');
+    fetchApiBtnEl = document.getElementById('fetchApiBtn');
+    
+    // Data source toggle handling
+    const dataSourceRadios = document.querySelectorAll('input[name="dataSource"]');
+    dataSourceRadios.forEach(radio => {
+        radio.addEventListener('change', handleDataSourceChange);
+    });
+    
     if (analyzeBtnEl) {
         analyzeBtnEl.addEventListener('click', () => handleFileSelection(fileInputEl && fileInputEl.files[0]));
+    }
+    if (fetchApiBtnEl) {
+        fetchApiBtnEl.addEventListener('click', handleApiDataFetch);
     }
     // Prevent implicit form submission via Enter key
     const filtersForm = document.getElementById('filtersForm');
@@ -163,6 +174,180 @@ function handleFileSelection(file) {
     };
     reader.onerror = () => { setStatus('File read error', true); showLoading(false); };
     reader.readAsText(file);
+}
+
+// --- Data source toggle handling ---
+function handleDataSourceChange() {
+    const selectedSource = document.querySelector('input[name="dataSource"]:checked').value;
+    const fileControls = document.querySelectorAll('.file-picker');
+    const apiControls = document.querySelectorAll('.api-input');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const fetchBtn = document.getElementById('fetchApiBtn');
+    
+    if (selectedSource === 'file') {
+        fileControls.forEach(el => el.style.display = 'flex');
+        apiControls.forEach(el => el.style.display = 'none');
+        analyzeBtn.style.display = 'inline-flex';
+        fetchBtn.style.display = 'none';
+    } else {
+        fileControls.forEach(el => el.style.display = 'none');
+        apiControls.forEach(el => el.style.display = 'flex');
+        analyzeBtn.style.display = 'none';
+        fetchBtn.style.display = 'inline-flex';
+    }
+}
+
+// --- GitHub API integration ---
+async function handleApiDataFetch() {
+    const pat = document.getElementById('githubPat').value.trim();
+    const orgName = document.getElementById('orgNameApi').value.trim();
+    
+    if (!pat) {
+        setStatus('GitHub Personal Access Token is required for API access.', true);
+        return;
+    }
+    
+    if (!orgName) {
+        setStatus('Organization name is required for API access.', true);
+        return;
+    }
+    
+    showLoading(true);
+    setStatus('Fetching data from GitHub APIs...');
+    
+    try {
+        // Fetch organization members and metrics in parallel
+        const [membersData, metricsData] = await Promise.all([
+            fetchOrganizationMembers(pat, orgName),
+            fetchCopilotMetrics(pat, orgName)
+        ]);
+        
+        // Store members data if available
+        if (membersData && membersData.length) {
+            const logins = new Set();
+            membersData.forEach(member => {
+                if (member.login) logins.add(member.login.toLowerCase());
+            });
+            window.__membersSet = logins;
+            updateMembersStatus();
+        }
+        
+        // Process metrics data
+        if (!metricsData || !metricsData.length) {
+            throw new Error('No metrics data returned from API.');
+        }
+        
+        window.__rawData = metricsData;
+        initializeFilters(metricsData);
+        analyzeData(metricsData);
+        setStatus(`Loaded ${metricsData.length} metrics records and ${membersData?.length || 0} members from GitHub API`);
+        enableDownloadButton();
+        
+    } catch (err) {
+        console.error('API fetch error:', err);
+        setStatus(`API fetch failed: ${err.message}`, true);
+        alert('Failed to fetch data from GitHub API: ' + err.message);
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function fetchOrganizationMembers(pat, orgName) {
+    const response = await fetch(`https://api.github.com/orgs/${orgName}/members`, {
+        headers: {
+            'Authorization': `Bearer ${pat}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+        }
+    });
+    
+    if (!response.ok) {
+        if (response.status === 401) {
+            throw new Error('Invalid GitHub token or insufficient permissions. Token needs "read:org" scope.');
+        } else if (response.status === 404) {
+            throw new Error(`Organization "${orgName}" not found or token lacks permission to view members.`);
+        } else {
+            throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+        }
+    }
+    
+    return await response.json();
+}
+
+async function fetchCopilotMetrics(pat, orgName) {
+    // First try organization-level metrics
+    let response = await fetch(`https://api.github.com/orgs/${orgName}/copilot/usage`, {
+        headers: {
+            'Authorization': `Bearer ${pat}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+        }
+    });
+    
+    if (!response.ok) {
+        if (response.status === 401) {
+            throw new Error('Invalid GitHub token or insufficient permissions. Token needs "copilot:read" or "manage_billing:copilot" scope.');
+        } else if (response.status === 404) {
+            throw new Error(`Copilot metrics not found for organization "${orgName}". Ensure the org has Copilot enabled and your token has the right permissions.`);
+        } else if (response.status === 403) {
+            throw new Error('Access denied. Token needs "copilot:read" or "manage_billing:copilot" scope for Copilot metrics.');
+        } else {
+            throw new Error(`Copilot API error: ${response.status} ${response.statusText}`);
+        }
+    }
+    
+    const data = await response.json();
+    
+    // Transform the API response to match the expected format
+    // The Copilot API returns usage data in a different structure than the file exports
+    // We need to normalize it to match the expected schema
+    return normalizeApiData(data);
+}
+
+function normalizeApiData(apiData) {
+    // Transform GitHub Copilot API response to match the expected file format
+    // The API typically returns data in a different structure than exports
+    
+    if (!apiData) return [];
+    
+    // If it's already an array (like what we expect), return as-is
+    if (Array.isArray(apiData)) {
+        return apiData;
+    }
+    
+    // If it has a breakdown by day, transform it
+    if (apiData.breakdown) {
+        return apiData.breakdown.map(dayData => ({
+            day: dayData.date,
+            user_id: dayData.editor || 'unknown',
+            user_login: dayData.editor || 'unknown',
+            user_initiated_interaction_count: dayData.suggestions_count || 0,
+            code_generation_activity_count: dayData.acceptances_count || 0,
+            code_acceptance_activity_count: dayData.lines_accepted || 0,
+            // Add other fields as needed based on API response
+            totals_by_language_feature: dayData.languages?.map(lang => ({
+                language: lang.name,
+                code_generation_activity_count: lang.suggestions_count || 0,
+                user_initiated_interaction_count: lang.suggestions_count || 0
+            })) || [],
+            totals_by_feature: [{
+                feature: 'code_completion',
+                user_initiated_interaction_count: dayData.suggestions_count || 0
+            }],
+            totals_by_model_feature: [{
+                model: 'unknown',
+                feature: 'code_completion',
+                user_initiated_interaction_count: dayData.suggestions_count || 0
+            }],
+            totals_by_ide: dayData.editors?.map(editor => ({
+                ide: editor.name,
+                code_acceptance_activity_count: editor.acceptances_count || 0
+            })) || []
+        }));
+    }
+    
+    // If it's a single object, wrap it in an array
+    return [apiData];
 }
 
 // --- Members file handling (org members export) ---
