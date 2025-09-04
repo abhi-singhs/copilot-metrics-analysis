@@ -19,17 +19,34 @@
     </header>
     <main id="mainContent" tabindex="-1">
     <section class="panel controls-panel" role="region" aria-label="Filters and data controls">
-            <p class="small-note">Upload a GitHub Copilot enterprise export (JSON array, object, or JSON Lines) to begin analysis.</p>
+            <p class="small-note">Upload a GitHub Copilot metrics export. (Optional) Use GitHub API just to fetch organization members for filtering.</p>
             <form id="filtersForm" class="filters-form" novalidate>
                 <fieldset class="data-group">
                     <legend class="visually-hidden">Data Sources</legend>
+                    <div class="control-item" style="grid-column: 1 / -1;">
+                        <label class="inline-checkbox" for="apiMembersToggle">
+                            <input type="checkbox" id="apiMembersToggle" />
+                            <span>Fetch organization members via GitHub API <span class="optional">(optional)</span></span>
+                        </label>
+                        <div class="assist-text">Leave unchecked to manually upload a members JSON file. When enabled, enter PAT + org name then click "Fetch Members".</div>
+                    </div>
                     <div class="controls-grid">
                         <div class="control-item file-picker" id="metricsFileWrap">
                             <label for="jsonFileInput">Upload Copilot Metrics JSON<span class="req-indicator" aria-hidden="true">*</span></label>
                             <input type="file" id="jsonFileInput" accept=".json,.jsonl,.ndjson,.txt,application/json" aria-describedby="metricsFileHelp" required />
                             <div id="metricsFileHelp" class="assist-text">JSON array, object wrapper, or JSON Lines with usage records.</div>
                         </div>
-                        <div class="control-item file-picker">
+                        <div class="control-item api-input" id="githubPatWrap" style="display: none;">
+                            <label for="githubPat">GitHub Personal Access Token<span class="req-indicator" aria-hidden="true">*</span></label>
+                            <input type="password" id="githubPat" placeholder="ghp_..." aria-describedby="githubPatHelp" />
+                            <div id="githubPatHelp" class="assist-text">Optional: only needed to fetch org members. Scope: <code>read:org</code>.</div>
+                        </div>
+                        <div class="control-item api-input" id="orgNameApiWrap" style="display: none;">
+                            <label for="orgNameApi">Organization Name<span class="req-indicator" aria-hidden="true">*</span></label>
+                            <input type="text" id="orgNameApi" placeholder="e.g. github" aria-describedby="orgNameApiHelp" />
+                            <div id="orgNameApiHelp" class="assist-text">Organization whose members you want to load for filtering (no metrics fetched via API).</div>
+                        </div>
+                        <div class="control-item file-picker" id="membersFileWrapper">
                             <label for="membersFileInput">Upload Org Members JSON <span class="optional">(optional)</span></label>
                             <input type="file" id="membersFileInput" accept=".json,.jsonl,.ndjson,.txt,application/json" aria-describedby="membersFileHelp" />
                             <div id="membersFileHelp" class="assist-text">Array / JSON Lines containing objects with a <code>login</code> field.</div>
@@ -83,6 +100,7 @@
                     <button type="button" id="applyFiltersBtn" class="primary-action" disabled>Apply Filters</button>
                     <button type="button" id="resetFiltersBtn" class="secondary">Reset</button>
                     <button type="button" id="analyzeBtn" class="secondary">Load File</button>
+                    <button type="button" id="fetchApiBtn" class="secondary" style="display: none;">Fetch Members</button>
                     <button type="button" id="downloadPdfBtn" class="secondary" disabled aria-label="Download dashboard as PDF">Download PDF</button>
                     <button type="button" id="userUsageBtn" class="secondary" disabled aria-label="View per-user usage table">User Usage Table</button>
                 </div>
@@ -133,7 +151,7 @@
     <script src="https://code.highcharts.com/modules/accessibility.js"></script>
     <!-- Libraries for enhanced PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/3.0.2/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="script.js"></script>
 </body>
 </html>

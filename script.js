@@ -3,7 +3,21 @@ window.addEventListener('load', () => {
     setupHighchartsTheme();
     setStatus('Awaiting upload…');
     renderPlaceholders();
+    warnIfFileOrigin();
 });
+
+function warnIfFileOrigin() {
+    try {
+        if (location.protocol === 'file:') {
+            const msg = 'Running from file:// origin. Some report downloads may fail due to CORS. Serve locally (e.g. python3 -m http.server) to avoid CORS issues.';
+            console.warn('[cors]', msg);
+            const status = document.getElementById('statusMessage');
+            if (status && !status.textContent.includes('CORS')) {
+                status.textContent = msg;
+            }
+        }
+    } catch (_) { /* ignore */ }
+}
 
 function setupHighchartsTheme() {
     if (typeof Highcharts === 'undefined') return;
@@ -62,12 +76,24 @@ function setupHighchartsTheme() {
 }
 
 // Enhanced manual file selection & parsing (supports JSON array or JSONL)
-let fileInputEl, analyzeBtnEl;
+let fileInputEl, analyzeBtnEl, fetchApiBtnEl;
 document.addEventListener('DOMContentLoaded', () => {
     fileInputEl = document.getElementById('jsonFileInput');
     analyzeBtnEl = document.getElementById('analyzeBtn');
+    fetchApiBtnEl = document.getElementById('fetchApiBtn');
+    
+    // API members toggle handling
+    const apiToggle = document.getElementById('apiMembersToggle');
+    if (apiToggle) {
+        apiToggle.addEventListener('change', handleApiToggleChange);
+        handleApiToggleChange();
+    }
+    
     if (analyzeBtnEl) {
         analyzeBtnEl.addEventListener('click', () => handleFileSelection(fileInputEl && fileInputEl.files[0]));
+    }
+    if (fetchApiBtnEl) {
+        fetchApiBtnEl.addEventListener('click', handleApiDataFetch);
     }
     // Prevent implicit form submission via Enter key
     const filtersForm = document.getElementById('filtersForm');
@@ -164,6 +190,64 @@ function handleFileSelection(file) {
     reader.onerror = () => { setStatus('File read error', true); showLoading(false); };
     reader.readAsText(file);
 }
+
+// --- Data source toggle handling ---
+function handleApiToggleChange() {
+    const enabled = document.getElementById('apiMembersToggle')?.checked;
+    const apiControls = document.querySelectorAll('.api-input');
+    const fetchBtn = document.getElementById('fetchApiBtn');
+    apiControls.forEach(el => el.style.display = enabled ? 'flex' : 'none');
+    if (fetchBtn) fetchBtn.style.display = enabled ? 'inline-flex' : 'none';
+    const membersFileWrapper = document.getElementById('membersFileWrapper');
+    if (membersFileWrapper) membersFileWrapper.style.display = enabled ? 'none' : 'flex';
+}
+
+// --- GitHub API (members only) ---
+async function handleApiDataFetch() {
+    const pat = document.getElementById('githubPat').value.trim();
+    const org = document.getElementById('orgNameApi').value.trim();
+    if (!pat) { setStatus('PAT required to fetch members.', true); return; }
+    if (!org) { setStatus('Organization name required.', true); return; }
+    showLoading(true);
+    setStatus('Fetching organization members…');
+    try {
+        const members = await fetchOrganizationMembers(pat, org);
+        if (!members.length) throw new Error('No members returned.');
+        const logins = new Set(); members.forEach(m => { if (m.login) logins.add(m.login.toLowerCase()); });
+        window.__membersSet = logins;
+        updateMembersStatus();
+        setStatus(`Loaded ${logins.size} members. Upload or re-upload metrics file to filter.`);
+        if (document.getElementById('membersOnlyChk')?.checked && window.__rawData) applyFilters();
+    } catch (err) {
+        console.error('Members fetch error:', err);
+        setStatus(`Members fetch failed: ${err.message}`, true);
+        alert('Members fetch failed: ' + err.message);
+    } finally { showLoading(false); }
+}
+
+async function fetchOrganizationMembers(pat, orgName) {
+    const response = await fetch(`https://api.github.com/orgs/${orgName}/members`, {
+        headers: {
+            'Authorization': `Bearer ${pat}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+        }
+    });
+    
+    if (!response.ok) {
+        if (response.status === 401) {
+            throw new Error('Invalid GitHub token or insufficient permissions. Token needs "read:org" scope.');
+        } else if (response.status === 404) {
+            throw new Error(`Organization "${orgName}" not found or token lacks permission to view members.`);
+        } else {
+            throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+        }
+    }
+    
+    return await response.json();
+}
+
+// Removed legacy fetchCopilotMetrics / normalizeApiData in favor of report-based ingestion.
 
 // --- Members file handling (org members export) ---
 function handleMembersFile(file) {
