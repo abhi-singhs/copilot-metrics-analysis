@@ -2,6 +2,8 @@
 
 This is a local, client‑side dashboard for exploring GitHub Copilot Enterprise usage exports. It supports both **local file uploads** and **direct GitHub API integration**. No data is uploaded to a server: everything stays in your browser.
 
+See `metrics-updates.md` for details on the new Lines of Code (LoC) metrics and agent mode handling introduced in the private preview.
+
 ### Quick Start Options
 
 #### Option 1: Upload + (Optional) API Members Fetch (Recommended Hybrid)
@@ -98,6 +100,9 @@ Summary cards show totals (active users, interactions, completions, acceptances,
 * Language usage (totals, per day stacked area)
 * Model usage (overall, per day, per feature)
 * Feature usage, IDE distribution
+* Lines of Code (LoC): Suggested (chat) vs Edits (added/deleted) by feature, and Edits by language
+* LoC Suggested (Delete) by feature
+* LoC: Agent vs Non‑Agent (Edits)
 * Heatmaps (Language × Model, Feature × Model)
 * Daily and weekly active users
 
@@ -105,6 +110,7 @@ Summary cards show totals (active users, interactions, completions, acceptances,
 Click the "User Usage Table" button (enabled after loading data) to view a sortable table of aggregated metrics per user:
 * Interactions, completions, acceptances, acceptance %
 * Distinct active days
+* LoC Suggested (add), LoC Added, LoC Deleted
 * Top model, language, and feature (based on interaction counts)
 
 You can:
@@ -130,6 +136,7 @@ Hover any chart element for tooltips. Categories auto‑trim if extremely long t
 |---------|-------------|
 | “Upload parse error” | Ensure valid JSON / JSON Lines; remove comment lines; check for trailing commas. |
 | No charts after upload | File may be empty or fields missing required numeric metrics. Verify export source. |
+| LoC values are null | Before 2025-09-01 exports may include legacy fields where new LoC metrics are null. Update IDEs and use newer dates for full LoC coverage. |
 | Members only disabled | Upload a members file with objects containing a login field. |
 | Date inputs empty or disabled | Ensure records contain a `day` field (YYYY-MM-DD). |
 | PDF button disabled | Load a metrics file first; button enables after successful parsing. |
@@ -140,6 +147,7 @@ Hover any chart element for tooltips. Categories auto‑trim if extremely long t
 3. Open dashboard locally and load metrics file.
 4. Apply date + user filters to focus on adoption windows (e.g., last 28 days).
 5. Review acceptance, agent adoption %, weekly active users.
+6. Review LoC metrics: Suggested (from chat panel code blocks) vs Added/Deleted (from agent_edit and edit mode), Suggested (Delete) by feature, and an Agent vs Non‑Agent view of edits. Note that agent edits are excluded from suggestions by design.
 6. Export PDF for sharing with stakeholders.
 
 ### 10. FAQ
@@ -149,6 +157,10 @@ No—network requests are only for public script libraries (Highcharts / jsPDF /
 State isn’t persisted; reapply filters after reopening.
 * Large files? \
 Modern browsers handle several MB. Extremely large exports may slow rendering—filter by date to reduce scope.
+
+### LoC Metrics Notes
+- Availability: New LoC fields (`loc_suggested_to_add_sum`, `loc_suggested_to_delete_sum`, `loc_added_sum`, `loc_deleted_sum`) are fully populated on and after 2025‑09‑01. Earlier reports may show these as null while legacy `generated_loc_sum`/`accepted_loc_sum` remain 0.
+- Agent behavior: Agent and edit mode edits are counted as added/deleted lines under the `agent_edit` feature. Suggestions for agent mode only cover chat panel code blocks; inline edits by the agent are not counted as suggestions.
 
 ---
 For feature ideas or adjustments, edit `script.js` or `style.css` — no build step required.
