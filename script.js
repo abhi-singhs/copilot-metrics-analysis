@@ -605,6 +605,56 @@ function analyzeData(data) {
         const weekCounts = weekKeys.map(k => weekMap[k].size);
         createChart('Weekly Active Users', 'line', weekKeys, weekCounts);
     }
+
+    // New LoC charts
+    const locAgg = computeLocAggregations(data);
+    if (locAgg) {
+        const featureCats = Array.from(locAgg.byFeature.keys());
+        if (featureCats.length) {
+            const sugg = featureCats.map(f => locAgg.byFeature.get(f).suggestAdd || 0);
+            const add = featureCats.map(f => locAgg.byFeature.get(f).added || 0);
+            const del = featureCats.map(f => locAgg.byFeature.get(f).deleted || 0);
+            // Stacked columns: suggested vs edits (added+deleted)
+            const series = [
+                { name: 'LoC Suggested (Add)', data: sugg },
+                { name: 'LoC Added (Edits)', data: add },
+                { name: 'LoC Deleted (Edits)', data: del }
+            ];
+            createStackedChart('LoC by Feature (Suggested vs Edits)', featureCats.map(formatFeatureName), series, 'column');
+
+            // Separate chart for LoC Suggested (Delete) by feature (show only if meaningful)
+            const suggDel = featureCats.map(f => locAgg.byFeature.get(f).suggestDel || 0);
+            const hasSuggDel = suggDel.some(v => v > 0);
+            if (hasSuggDel) {
+                createChart('LoC Suggested (Delete) by Feature', 'column', featureCats.map(formatFeatureName), suggDel);
+            }
+        }
+        const langCats = Array.from(locAgg.byLanguage.keys());
+        if (langCats.length) {
+            const addL = langCats.map(l => locAgg.byLanguage.get(l).added || 0);
+            const delL = langCats.map(l => locAgg.byLanguage.get(l).deleted || 0);
+            const series2 = [
+                { name: 'LoC Added', data: addL },
+                { name: 'LoC Deleted', data: delL }
+            ];
+            createStackedChart('LoC by Language (Edits)', langCats, series2, 'column');
+        }
+
+        // Agent vs Non-Agent LoC (Edits)
+        if ((locAgg.totalAdded || 0) + (locAgg.totalDeleted || 0)) {
+            const agentBucket = locAgg.byFeature.get('agent_edit') || { added: 0, deleted: 0 };
+            const agentAdded = agentBucket.added || 0;
+            const agentDeleted = agentBucket.deleted || 0;
+            const nonAgentAdded = Math.max(0, (locAgg.totalAdded || 0) - agentAdded);
+            const nonAgentDeleted = Math.max(0, (locAgg.totalDeleted || 0) - agentDeleted);
+            const categories = ['LoC Added', 'LoC Deleted'];
+            const datasets = [
+                { label: 'Agent Edit', data: [agentAdded, agentDeleted] },
+                { label: 'Non-Agent', data: [nonAgentAdded, nonAgentDeleted] }
+            ];
+            createGroupedBarChart('LoC: Agent vs Non-Agent (Edits)', categories, datasets);
+        }
+    }
 }
 
 function createChart(title, type, categories, seriesData) {
@@ -911,6 +961,7 @@ function computeSummaryMetrics(data) {
     data.forEach(r => { if (!r.day) return; const d=new Date(r.day+'T00:00:00Z'); const dow=d.getUTCDay(); const diff=(dow+6)%7; const monday=new Date(d); monday.setUTCDate(d.getUTCDate()-diff); const key=monday.toISOString().substring(0,10); if(!weekUserMap[key]) weekUserMap[key]=new Set(); weekUserMap[key].add(r.user_id); });
     const latestWeekCount = Object.keys(weekUserMap).sort().slice(-1).map(k => weekUserMap[k].size)[0] || 0;
 
+    const locAgg = computeLocAggregations(data);
     const cards = [
         { label: 'Total Active Users', value: uniqueUsers },
         { label: 'Total Interactions', value: totalInteractions },
@@ -924,7 +975,19 @@ function computeSummaryMetrics(data) {
         { label: 'Weekly Active Users (Latest)', value: latestWeekCount },
         { label: 'Distinct Days', value: days }
     ];
-    container.innerHTML = cards.map(c => metricCard(c.label, c.value)).join('');
+    if (locAgg && (locAgg.totalSuggestedAdd > 0 || locAgg.totalAdded > 0 || locAgg.totalDeleted > 0)) {
+        cards.splice(5, 0,
+            { label: 'LoC Suggested (Add)', value: (locAgg.totalSuggestedAdd).toLocaleString() },
+            { label: 'LoC Added (Edits)', value: (locAgg.totalAdded).toLocaleString() },
+            { label: 'LoC Deleted (Edits)', value: (locAgg.totalDeleted).toLocaleString() }
+        );
+    }
+    const cardsHtml = cards.map(c => metricCard(c.label, c.value)).join('');
+    let locNoteHtml = '';
+    if (locAgg && locAgg.boundary && (locAgg.boundary.hasBefore || locAgg.boundary.hasNulls)) {
+        locNoteHtml = `<div class="small-note" style="margin-top:8px;">LoC metrics: reports before 2025-09-01 may show partial/null values. Agent edits are counted in <code>agent_edit</code> as added/deleted; suggestions come from chat panel only.</div>`;
+    }
+    container.innerHTML = cardsHtml + locNoteHtml;
 }
 
 function metricCard(label, value) {
@@ -953,6 +1016,12 @@ function enableDownloadButton() {
 
 function escapeHtml(str) {
     return String(str).replace(/[&<>"]+/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
+}
+
+// Numeric helper: coerce to number or 0
+function toNum(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
 }
 
 // Map raw feature code names to friendly display names
@@ -1003,6 +1072,50 @@ function renderPlaceholders() {
 }
 
 // --- Enhanced PDF generation (multi-page) ---
+// ================= LoC Aggregations & Charts ================= //
+function computeLocAggregations(data) {
+    if (!Array.isArray(data) || !data.length) return null;
+    const byFeature = new Map(); // feature -> {suggestAdd, suggestDel, added, deleted}
+    const byLanguage = new Map(); // language -> {added, deleted}
+    let totalSuggestedAdd = 0, totalSuggestedDel = 0, totalAdded = 0, totalDeleted = 0;
+    let hasNulls = false;
+    let hasBefore = false, hasOnOrAfter = false;
+    for (const r of data) {
+        const day = r.day;
+        if (day) {
+            if (day < '2025-09-01') hasBefore = true; else hasOnOrAfter = true;
+        }
+        if (Array.isArray(r.totals_by_feature)) {
+            for (const f of r.totals_by_feature) {
+                const feat = f.feature || 'unknown';
+                const sAdd = f.loc_suggested_to_add_sum;
+                const sDel = f.loc_suggested_to_delete_sum;
+                const add = f.loc_added_sum;
+                const del = f.loc_deleted_sum;
+                if (sAdd === null || sDel === null || add === null || del === null) hasNulls = true;
+                const v = byFeature.get(feat) || { suggestAdd: 0, suggestDel: 0, added: 0, deleted: 0 };
+                if (Number.isFinite(Number(sAdd))) { v.suggestAdd += Number(sAdd); totalSuggestedAdd += Number(sAdd); }
+                if (Number.isFinite(Number(sDel))) { v.suggestDel += Number(sDel); totalSuggestedDel += Number(sDel); }
+                if (Number.isFinite(Number(add))) { v.added += Number(add); totalAdded += Number(add); }
+                if (Number.isFinite(Number(del))) { v.deleted += Number(del); totalDeleted += Number(del); }
+                byFeature.set(feat, v);
+            }
+        }
+        if (Array.isArray(r.totals_by_language_feature)) {
+            for (const lf of r.totals_by_language_feature) {
+                const lang = lf.language || 'unknown';
+                const add = lf.loc_added_sum;
+                const del = lf.loc_deleted_sum;
+                if (add === null || del === null) hasNulls = true;
+                const v = byLanguage.get(lang) || { added: 0, deleted: 0 };
+                if (Number.isFinite(Number(add))) { v.added += Number(add); }
+                if (Number.isFinite(Number(del))) { v.deleted += Number(del); }
+                byLanguage.set(lang, v);
+            }
+        }
+    }
+    return { totalSuggestedAdd, totalSuggestedDel, totalAdded, totalDeleted, byFeature, byLanguage, boundary: { hasBefore, hasOnOrAfter, hasNulls } };
+}
 async function generatePdfReport() {
     const { jsPDF } = window.jspdf || {};
     if (!jsPDF || !window.html2canvas) {
@@ -1195,7 +1308,10 @@ function aggregateUserUsage(data) {
                 days_active: new Set(),
                 models: {},
                 languages: {},
-                features: {}
+                features: {},
+                loc_suggested_add: 0,
+                loc_added: 0,
+                loc_deleted: 0
             });
         }
         const row = map.get(login);
@@ -1220,6 +1336,10 @@ function aggregateUserUsage(data) {
             r.totals_by_feature.forEach(f => {
                 const feat = f.feature || 'unknown';
                 row.features[feat] = (row.features[feat] || 0) + (f.user_initiated_interaction_count || 0);
+                // LoC per-user: sum from feature bucket to avoid double-counting
+                row.loc_suggested_add += toNum(f.loc_suggested_to_add_sum);
+                row.loc_added += toNum(f.loc_added_sum);
+                row.loc_deleted += toNum(f.loc_deleted_sum);
             });
         }
     });
@@ -1257,6 +1377,9 @@ function buildUserUsageTable(data) {
         { key: 'acceptances', label: 'Acceptances' },
         { key: 'acceptance_rate', label: 'Acceptance %' },
         { key: 'days_active_count', label: 'Days Active' },
+        { key: 'loc_suggested_add', label: 'LoC Suggested' },
+        { key: 'loc_added', label: 'LoC Added' },
+        { key: 'loc_deleted', label: 'LoC Deleted' },
         { key: 'top_model', label: 'Top Model' },
         { key: 'top_language', label: 'Top Language' },
         { key: 'top_feature', label: 'Top Feature' }
@@ -1296,6 +1419,9 @@ function buildUserUsageTable(data) {
             <td>${r.acceptances}</td>
             <td>${r.acceptance_rate.toFixed(1)}</td>
             <td>${r.days_active_count}</td>
+            <td>${r.loc_suggested_add}</td>
+            <td>${r.loc_added}</td>
+            <td>${r.loc_deleted}</td>
             <td>${escapeHtml(r.top_model)}</td>
             <td>${escapeHtml(r.top_language)}</td>
             <td>${escapeHtml(r.top_feature)}</td>
@@ -1307,7 +1433,7 @@ function buildUserUsageTable(data) {
 function exportUserUsageCsv() {
     const rows = window.__userUsageRows || aggregateUserUsage(window.__currentFilteredData || window.__rawData || []);
     if (!rows.length) { alert('No rows to export'); return; }
-    const header = ['user_login','user_id','interactions','completions','acceptances','acceptance_rate','days_active','top_model','top_language','top_feature'];
+    const header = ['user_login','user_id','interactions','completions','acceptances','acceptance_rate','days_active','loc_suggested_add','loc_added','loc_deleted','top_model','top_language','top_feature'];
     const lines = [header.join(',')];
     rows.forEach(r => {
         const vals = [
@@ -1318,6 +1444,9 @@ function exportUserUsageCsv() {
             r.acceptances,
             r.acceptance_rate.toFixed(2),
             r.days_active_count,
+            r.loc_suggested_add,
+            r.loc_added,
+            r.loc_deleted,
             r.top_model,
             r.top_language,
             r.top_feature
