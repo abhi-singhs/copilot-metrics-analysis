@@ -1,5 +1,7 @@
 ## GitHub Copilot Metrics Analyzer – Usage Guide
 
+**Please note this is not an official solution from GitHub.**
+
 This is a local, client‑side dashboard for exploring GitHub Copilot Enterprise usage exports. It supports both **local file uploads** and **direct GitHub API integration**. No data is uploaded to a server: everything stays in your browser.
 
 See `metrics-updates.md` for details on the new Lines of Code (LoC) metrics and agent mode handling introduced in the private preview.
