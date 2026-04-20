@@ -85,11 +85,11 @@ The dashboard now supports two data sources:
 3. (Optional) Upload the members file to activate the “Members only” checkbox.
 
 Screenshots:
-![Initial dashboard awaiting upload](img/initial-state.png)
+![Dashboard before loading a metrics export](img/readme-dashboard-empty.png)
 ---
-![Initial dashboard with GitHub API](img/Initital-state-API.png)
+![Optional members setup with GitHub API fetch enabled](img/readme-members-api.png)
 ---
-![Example](img/example.png)
+![Loaded dashboard with summary cards and charts](img/readme-dashboard-loaded.png)
 ---
 
 ### 4. Use filters & quick ranges
