@@ -1,10 +1,29 @@
 // Apply theme only; user must upload a file now (no default data.json)
 window.addEventListener('load', () => {
     setupHighchartsTheme();
-    setStatus('Awaiting upload…');
+    setStatus('Ready for a metrics export. Upload a JSON or JSON Lines file to populate the dashboard.');
     renderPlaceholders();
     warnIfFileOrigin();
 });
+
+const CHAT_FEATURES = new Set([
+    'chat_inline',
+    'chat_panel_agent_mode',
+    'chat_panel_ask_mode',
+    'chat_panel_custom_mode',
+    'chat_panel_edit_mode',
+    'chat_panel_plan_mode',
+    'chat_panel_unknown_mode'
+]);
+
+const CHAT_MODE_FEATURES = [
+    'chat_panel_ask_mode',
+    'chat_panel_edit_mode',
+    'chat_panel_plan_mode',
+    'chat_panel_agent_mode',
+    'chat_panel_custom_mode',
+    'chat_panel_unknown_mode'
+];
 
 function warnIfFileOrigin() {
     try {
@@ -12,11 +31,17 @@ function warnIfFileOrigin() {
             const msg = 'Running from file:// origin. Some report downloads may fail due to CORS. Serve locally (e.g. python3 -m http.server) to avoid CORS issues.';
             console.warn('[cors]', msg);
             const status = document.getElementById('statusMessage');
-            if (status && !status.textContent.includes('CORS')) {
-                status.textContent = msg;
-            }
+            if (status && !status.textContent.includes('CORS')) setStatus(msg);
         }
     } catch (_) { /* ignore */ }
+}
+
+function prefersReducedMotion() {
+    return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+function preferredScrollBehavior() {
+    return prefersReducedMotion() ? 'auto' : 'smooth';
 }
 
 function setupHighchartsTheme() {
@@ -24,34 +49,34 @@ function setupHighchartsTheme() {
     Highcharts.setOptions({
         chart: {
             backgroundColor: 'transparent',
-            style: { fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif' }
+            style: { fontFamily: 'ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }
         },
-        colors: ['#2563eb', '#059669', '#7c3aed', '#dc2626', '#f59e0b', '#0d9488', '#9333ea', '#ea580c', '#1d4ed8', '#16a34a'],
-        title: { style: { color: '#1f2328', fontWeight: '600'} },
-        subtitle: { style: { color: '#57606a' } },
+        colors: ['#0b5bd3', '#0f766e', '#7c3aed', '#b45309', '#2563eb', '#be185d', '#1d4ed8', '#15803d', '#9333ea', '#c2410c'],
+        title: { style: { color: '#152232', fontWeight: '700', fontSize: '15px' } },
+        subtitle: { style: { color: '#4d6177', fontSize: '12px' } },
         xAxis: {
-            lineColor: '#d0d7de',
-            tickColor: '#d0d7de',
-            gridLineColor: '#e5e9ef',
-            labels: { style: { color: '#57606a', fontSize: '11px' } },
-            title: { style: { color: '#57606a' } }
+            lineColor: '#c9d4e2',
+            tickColor: '#c9d4e2',
+            gridLineColor: '#dfe7f1',
+            labels: { style: { color: '#4d6177', fontSize: '12px' } },
+            title: { style: { color: '#4d6177', fontSize: '12px' } }
         },
         yAxis: {
-            lineColor: '#d0d7de',
-            tickColor: '#d0d7de',
-            gridLineColor: '#e5e9ef',
-            labels: { style: { color: '#57606a', fontSize: '11px' } },
-            title: { style: { color: '#57606a' } }
+            lineColor: '#c9d4e2',
+            tickColor: '#c9d4e2',
+            gridLineColor: '#dfe7f1',
+            labels: { style: { color: '#4d6177', fontSize: '12px' } },
+            title: { style: { color: '#4d6177', fontSize: '12px' } }
         },
         legend: {
             backgroundColor: 'transparent',
-            itemStyle: { color: '#1f2328', fontSize: '11px' },
-            itemHoverStyle: { color: '#2563eb' }
+            itemStyle: { color: '#152232', fontSize: '12px' },
+            itemHoverStyle: { color: '#0b5bd3' }
         },
         tooltip: {
-            backgroundColor: '#ffffff',
-            borderColor: '#d0d7de',
-            style: { color: '#1f2328' },
+            backgroundColor: '#fcfdff',
+            borderColor: '#c9d4e2',
+            style: { color: '#152232', fontSize: '12px' },
             valueDecimals: 0,
             // Show the specific section (category / slice / point) name instead of the chart title
             formatter: function() {
@@ -69,7 +94,7 @@ function setupHighchartsTheme() {
         plotOptions: {
             column: { borderRadius: 2, borderWidth: 0 },
             bar: { borderRadius: 2, borderWidth: 0 },
-            pie: { dataLabels: { style: { fontSize: '11px', color: '#1f2328' } } }
+            pie: { dataLabels: { style: { fontSize: '12px', color: '#152232' } } }
         },
         credits: { enabled: false }
     });
@@ -81,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fileInputEl = document.getElementById('jsonFileInput');
     analyzeBtnEl = document.getElementById('analyzeBtn');
     fetchApiBtnEl = document.getElementById('fetchApiBtn');
+    const fileTriggerEl = document.getElementById('jsonFileTrigger');
     
     // API members toggle handling
     const apiToggle = document.getElementById('apiMembersToggle');
@@ -91,6 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (analyzeBtnEl) {
         analyzeBtnEl.addEventListener('click', () => handleFileSelection(fileInputEl && fileInputEl.files[0]));
+    }
+    if (fileTriggerEl && fileInputEl) {
+        fileTriggerEl.addEventListener('click', () => fileInputEl.click());
     }
     if (fetchApiBtnEl) {
         fetchApiBtnEl.addEventListener('click', handleApiDataFetch);
@@ -113,7 +142,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (fileInputEl) {
-        fileInputEl.addEventListener('change', () => fileInputEl.files && handleFileSelection(fileInputEl.files[0]));
+        syncSelectedFileName(fileInputEl, 'jsonFileName');
+        fileInputEl.addEventListener('change', () => {
+            syncSelectedFileName(fileInputEl, 'jsonFileName');
+            if (fileInputEl.files && fileInputEl.files[0]) handleFileSelection(fileInputEl.files[0]);
+        });
     }
     const membersInputEl = document.getElementById('membersFileInput');
     if (membersInputEl) {
@@ -138,11 +171,75 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+function syncSelectedFileName(inputEl, outputId, emptyText = 'No file chosen') {
+    const outputEl = document.getElementById(outputId);
+    if (!inputEl || !outputEl) return;
+    const fileName = inputEl.files && inputEl.files[0] ? inputEl.files[0].name : emptyText;
+    outputEl.textContent = fileName;
+    outputEl.title = fileName;
+}
+
+function looksLikeUsageRecordObject(obj) {
+    if (!obj || typeof obj !== 'object') return false;
+    return [
+        'day',
+        'day_totals',
+        'enterprise_id',
+        'organization_id',
+        'pull_requests',
+        'report_end_day',
+        'report_start_day',
+        'totals_by_cli',
+        'totals_by_feature',
+        'totals_by_ide',
+        'user_id',
+        'user_login'
+    ].some(key => Object.prototype.hasOwnProperty.call(obj, key));
+}
+
+function normalizeUsageRecords(records) {
+    const normalized = [];
+    (records || []).forEach(record => flattenUsageRecord(record, normalized));
+    return normalized;
+}
+
+function flattenUsageRecord(record, output) {
+    if (!record || typeof record !== 'object') return;
+    if (Array.isArray(record.day_totals)) {
+        const sharedMeta = {
+            enterprise_id: record.enterprise_id,
+            organization_id: record.organization_id,
+            report_start_day: record.report_start_day,
+            report_end_day: record.report_end_day,
+            etl_id: record.etl_id,
+            day_partition: record.day_partition,
+            entity_id_partition: record.entity_id_partition
+        };
+        record.day_totals.forEach(dayTotal => {
+            if (!dayTotal || typeof dayTotal !== 'object') return;
+            output.push({
+                ...sharedMeta,
+                ...dayTotal,
+                __record_scope: 'aggregate'
+            });
+        });
+        return;
+    }
+    output.push({
+        ...record,
+        __record_scope: (record.user_id || record.user_login) ? 'user' : 'daily'
+    });
+}
+
 function parseUploadedText(text) {
     // Try full JSON parse first (array or object with records?)
     try {
         const preliminary = JSON.parse(text);
         if (Array.isArray(preliminary)) { console.info('[upload] Parsed as JSON array'); return preliminary; }
+        if (looksLikeUsageRecordObject(preliminary)) {
+            console.info('[upload] Parsed as usage record object');
+            return [preliminary];
+        }
         // If object, attempt to find an array property with objects containing user_id or day
         const candidateKey = Object.keys(preliminary).find(k => Array.isArray(preliminary[k]) && preliminary[k].length && typeof preliminary[k][0] === 'object');
         if (candidateKey) { console.info('[upload] Parsed as object wrapper key=' + candidateKey); return preliminary[candidateKey]; }
@@ -171,18 +268,19 @@ function handleFileSelection(file) {
         try {
             const text = e.target.result;
             const data = parseUploadedText(text);
-            if (!Array.isArray(data) || !data.length) {
+            const normalized = normalizeUsageRecords(data);
+            if (!Array.isArray(normalized) || !normalized.length) {
                 throw new Error('Parsed result is empty.');
             }
-            window.__rawData = data;
-            initializeFilters(data);
-            analyzeData(data);
-            setStatus(`Loaded ${data.length} records from ${file.name}`);
+            window.__sourceData = data;
+            window.__rawData = normalized;
+            initializeFilters(normalized);
+            analyzeData(normalized);
+            setStatus(`Loaded ${normalized.length} usable records from ${file.name}`);
             enableDownloadButton();
         } catch (err) {
             console.error(err);
             setStatus(`Upload parse error: ${err.message}`, true);
-            alert('Error parsing file: ' + err.message);
         } finally {
             showLoading(false);
         }
@@ -216,12 +314,11 @@ async function handleApiDataFetch() {
         const logins = new Set(); members.forEach(m => { if (m.login) logins.add(m.login.toLowerCase()); });
         window.__membersSet = logins;
         updateMembersStatus();
-        setStatus(`Loaded ${logins.size} members. Upload or re-upload metrics file to filter.`);
+        setStatus(`Loaded ${logins.size} members. Reapply the current filters or load a metrics file if you have not uploaded one yet.`);
         if (document.getElementById('membersOnlyChk')?.checked && window.__rawData) applyFilters();
     } catch (err) {
         console.error('Members fetch error:', err);
         setStatus(`Members fetch failed: ${err.message}`, true);
-        alert('Members fetch failed: ' + err.message);
     } finally { showLoading(false); }
 }
 
@@ -280,7 +377,6 @@ function handleMembersFile(file) {
         } catch (err) {
             console.error(err);
             setStatus(`Members parse error: ${err.message}`, true);
-            alert('Error parsing members file: ' + err.message);
         }
     };
     reader.onerror = () => setStatus('Members file read error', true);
@@ -292,7 +388,7 @@ function updateMembersStatus() {
     const chk = document.getElementById('membersOnlyChk');
     if (!statusEl || !chk) return;
     const size = window.__membersSet ? window.__membersSet.size : 0;
-    statusEl.textContent = size ? `${size}` : '(none)';
+    statusEl.textContent = size ? `${size} loaded` : '(none loaded yet)';
     chk.disabled = size === 0;
     if (size === 0) chk.checked = false;
 }
@@ -310,20 +406,19 @@ function loadDataFile(filename) {
         })
         .then(text => {
             try {
-                const jsonLines = text.split('\n').filter(line => line.trim() !== '');
-                const data = jsonLines.map(line => JSON.parse(line));
-                window.__rawData = data; // store original dataset
-                initializeFilters(data);
-                analyzeData(data);
+                const data = parseUploadedText(text);
+                const normalized = normalizeUsageRecords(data);
+                window.__sourceData = data;
+                window.__rawData = normalized;
+                initializeFilters(normalized);
+                analyzeData(normalized);
                 enableDownloadButton();
             } catch (error) {
-                alert('Error parsing JSON file: ' + error.message);
-                setStatus('Parse error.', true);
+                setStatus(`Parse error: ${error.message}`, true);
             }
         })
         .catch(error => {
-            alert('Error loading data.json: ' + error.message);
-            setStatus('Load error.', true);
+            setStatus(`Load error: ${error.message}`, true);
         })
         .finally(() => {
             showLoading(false);
@@ -332,329 +427,1001 @@ function loadDataFile(filename) {
 
 function analyzeData(data) {
     const chartsContainer = document.getElementById('chartsContainer');
-    chartsContainer.innerHTML = ''; // Clear previous charts
+    if (chartsContainer) chartsContainer.innerHTML = '';
 
     if (!data || data.length === 0) {
-    setStatus('No data. Upload a file to begin.', true);
-    renderPlaceholders();
+        const hasLoadedData = Boolean(window.__rawData && window.__rawData.length);
+        setStatus(
+            hasLoadedData
+                ? 'No records match the current filters. Widen the date range, clear user search, or turn off the members-only filter.'
+                : 'Ready for a metrics export. Upload a JSON or JSON Lines file to populate the dashboard.'
+        );
+        const tablesSection = document.getElementById('tablesSection');
+        if (tablesSection) tablesSection.hidden = true;
+        renderPlaceholders(hasLoadedData ? 'filters' : 'upload');
+        const downloadBtn = document.getElementById('downloadPdfBtn');
+        if (downloadBtn) downloadBtn.disabled = true;
+        const userUsageBtn = document.getElementById('userUsageBtn');
+        if (userUsageBtn) userUsageBtn.disabled = true;
         return;
     }
 
-    setStatus(`Displaying ${data.length} records`);
-    // Accessibility: shift focus to main content after rendering new results
+    const model = buildDashboardModel(data);
+    window.__dashboardModel = model;
+    window.__currentFilteredData = data;
+
+    computeSummaryMetrics(model);
+    renderCharts(model);
+    renderReferenceTables(model);
+    enableDownloadButton();
+
+    const userUsageBtn = document.getElementById('userUsageBtn');
+    if (userUsageBtn) userUsageBtn.disabled = !model.meta.hasUserRecords;
+    if (!model.meta.hasUserRecords) {
+        const userUsageSection = document.getElementById('userUsageSection');
+        if (userUsageSection && !userUsageSection.hidden) toggleUserUsage(false);
+    }
+
+    const scopeLabel = model.meta.hasAggregateRecords
+        ? (model.meta.hasUserRecords ? 'mixed export' : 'aggregate export')
+        : 'user export';
+    setStatus(`Displaying ${model.meta.recordCount.toLocaleString()} records across ${model.meta.days.length.toLocaleString()} days (${scopeLabel})`);
+
     const main = document.getElementById('mainContent');
     if (main) {
-        // Delay slightly to ensure DOM updates (charts) are in place for assistive tech
         setTimeout(() => { main.focus(); }, 0);
     }
+}
 
-    // User interaction count by user (Top 10)
-    const userInteractions = {};
-    data.forEach(record => {
-        const user = record.user_login;
-        if (!userInteractions[user]) userInteractions[user] = 0;
-        userInteractions[user] += record.user_initiated_interaction_count;
-    });
-    const topUserInteractions = Object.entries(userInteractions)
-        .sort((a,b)=> b[1]-a[1])
-        .slice(0,10);
-    createChart('User Interaction Count (Top 10)', 'bar', topUserInteractions.map(x=>x[0]), topUserInteractions.map(x=>x[1]));
+function buildDashboardModel(data) {
+    const userRecords = data.filter(isUserLevelRecord);
+    const aggregateRecords = data.filter(record => !isUserLevelRecord(record));
+    const overallRecords = aggregateRecords.length ? aggregateRecords : data;
 
-    // Code generations by language
-    const langGenerations = {};
-    data.forEach(record => {
-        if (record.totals_by_language_feature) {
-            record.totals_by_language_feature.forEach(langFeature => {
-                const lang = langFeature.language || 'unknown';
-                if (!langGenerations[lang]) {
-                    langGenerations[lang] = 0;
-                }
-                langGenerations[lang] += langFeature.code_generation_activity_count;
+    const featureTotals = new Map();
+    const ideTotals = new Map();
+    const languageTotals = new Map();
+    const modelTotals = new Map();
+    const modelFeatureMatrix = new Map();
+    const languageModelMatrix = new Map();
+    const dayLanguageMap = new Map();
+    const dayModelMap = new Map();
+    const dayOverviewMap = new Map();
+    const cliDayMap = new Map();
+    const pullRequestDayMap = new Map();
+    const dayUserSets = new Map();
+    const dayCliUserSets = new Map();
+    const dayReviewActiveSets = new Map();
+    const dayReviewPassiveSets = new Map();
+    const weekUserSets = new Map();
+
+    const uniqueUsers = new Set();
+    const chatUsers = new Set();
+    const agentUsers = new Set();
+    const cliUsers = new Set();
+    const reviewActiveUsers = new Set();
+    const reviewPassiveUsers = new Set();
+
+    let totalInteractions = 0;
+    let totalGenerations = 0;
+    let totalAcceptances = 0;
+    let hasCli = false;
+    let hasPullRequests = false;
+    let hasCodeReview = false;
+
+    overallRecords.forEach(record => {
+        const day = record.day || '';
+        if (!day) return;
+
+        const dayRow = getOrCreateMapValue(dayOverviewMap, day, () => createDailyOverviewRow(day));
+        totalInteractions += toNum(record.user_initiated_interaction_count);
+        totalGenerations += toNum(record.code_generation_activity_count);
+        totalAcceptances += toNum(record.code_acceptance_activity_count);
+
+        dayRow.interactions += toNum(record.user_initiated_interaction_count);
+        dayRow.code_generations += toNum(record.code_generation_activity_count);
+        dayRow.acceptances += toNum(record.code_acceptance_activity_count);
+        dayRow.loc_suggested_add += toNum(record.loc_suggested_to_add_sum);
+        dayRow.loc_suggested_delete += toNum(record.loc_suggested_to_delete_sum);
+        dayRow.loc_added += toNum(record.loc_added_sum);
+        dayRow.loc_deleted += toNum(record.loc_deleted_sum);
+        dayRow.daily_active_users += toNum(record.daily_active_users);
+        dayRow.weekly_active_users += toNum(record.weekly_active_users);
+        dayRow.monthly_active_users += toNum(record.monthly_active_users);
+        dayRow.monthly_active_chat_users += toNum(record.monthly_active_chat_users);
+        dayRow.monthly_active_agent_users += toNum(record.monthly_active_agent_users);
+        dayRow.daily_active_cli_users += toNum(record.daily_active_cli_users);
+
+        if (Array.isArray(record.totals_by_feature)) {
+            record.totals_by_feature.forEach(featureBucket => {
+                const feature = featureBucket.feature || 'unknown';
+                accumulateMetricBucket(featureTotals, feature, featureBucket);
             });
         }
-    });
-    createChart('Code Generations by Language', 'pie', Object.keys(langGenerations), Object.values(langGenerations));
 
-    // Acceptances by IDE
-    const ideAcceptances = {};
-    data.forEach(record => {
-        if (record.totals_by_ide) {
-            record.totals_by_ide.forEach(ide => {
-                const ideName = ide.ide;
-                if (!ideAcceptances[ideName]) {
-                    ideAcceptances[ideName] = 0;
-                }
-                ideAcceptances[ideName] += ide.code_acceptance_activity_count;
+        if (Array.isArray(record.totals_by_ide)) {
+            record.totals_by_ide.forEach(ideBucket => {
+                const ide = ideBucket.ide || 'unknown';
+                const row = accumulateMetricBucket(ideTotals, ide, ideBucket);
+                updateLatestVersion(row, 'latest_ide_version', ideBucket.last_known_ide_version, info => info.ide_version || '');
+                updateLatestVersion(row, 'latest_plugin_version', ideBucket.last_known_plugin_version, info => {
+                    const parts = [info.plugin, info.plugin_version].filter(Boolean);
+                    return parts.join(' ') || info.plugin_version || '';
+                });
             });
         }
-    });
-    createChart('Code Acceptances by IDE', 'doughnut', Object.keys(ideAcceptances), Object.values(ideAcceptances));
 
-    // Completions vs Acceptances (Top 10 by completions)
-    const completions = {};
-    const acceptances = {};
-    data.forEach(record => {
-        const user = record.user_login;
-        if (!completions[user]) completions[user] = 0;
-        if (!acceptances[user]) acceptances[user] = 0;
-        completions[user] += record.code_generation_activity_count;
-        acceptances[user] += record.code_acceptance_activity_count;
+        if (Array.isArray(record.totals_by_language_feature)) {
+            record.totals_by_language_feature.forEach(languageBucket => {
+                const language = languageBucket.language || 'unknown';
+                accumulateMetricBucket(languageTotals, language, languageBucket);
+                accumulateNestedMetric(dayLanguageMap, day, language, pickPrimaryUsageValue(languageBucket));
+            });
+        }
+
+        if (Array.isArray(record.totals_by_model_feature)) {
+            record.totals_by_model_feature.forEach(modelBucket => {
+                const model = modelBucket.model || 'unknown';
+                const feature = modelBucket.feature || 'unknown';
+                accumulateMetricBucket(modelTotals, model, modelBucket);
+                accumulateNestedMetric(dayModelMap, day, model, pickPrimaryUsageValue(modelBucket));
+                accumulateNestedMetric(modelFeatureMatrix, feature, model, pickPrimaryUsageValue(modelBucket));
+            });
+        }
+
+        if (Array.isArray(record.totals_by_language_model)) {
+            record.totals_by_language_model.forEach(languageModelBucket => {
+                const language = languageModelBucket.language || 'unknown';
+                const model = languageModelBucket.model || 'unknown';
+                accumulateNestedMetric(languageModelMatrix, language, model, pickPrimaryUsageValue(languageModelBucket));
+            });
+        }
+
+        if (record.totals_by_cli) {
+            hasCli = true;
+            const cliRow = getOrCreateMapValue(cliDayMap, day, () => createCliDayRow(day));
+            accumulateCliRow(cliRow, record.totals_by_cli);
+        }
+
+        if (record.pull_requests) {
+            hasPullRequests = true;
+            const prRow = getOrCreateMapValue(pullRequestDayMap, day, () => createPullRequestDayRow(day));
+            accumulatePullRequestRow(prRow, record.pull_requests);
+        }
     });
-    const topCompUsers = Object.entries(completions)
-        .sort((a,b)=> b[1]-a[1])
-        .slice(0,10)
-        .map(x=>x[0]);
-    createGroupedBarChart('Completions vs. Acceptances (Top 10)', topCompUsers,
-        [{ label: 'Completions', data: topCompUsers.map(u=>completions[u]) }, { label: 'Acceptances', data: topCompUsers.map(u=>acceptances[u]) }]
+
+    userRecords.forEach(record => {
+        const userKey = record.user_id || record.user_login;
+        const day = record.day || '';
+        if (!userKey || !day) return;
+
+        uniqueUsers.add(userKey);
+        getOrCreateMapValue(dayUserSets, day, () => new Set()).add(userKey);
+        getOrCreateMapValue(weekUserSets, getWeekStart(day), () => new Set()).add(userKey);
+
+        if (record.used_chat || recordContainsChatActivity(record)) {
+            chatUsers.add(userKey);
+        }
+        if (record.used_agent || recordContainsAgentActivity(record)) {
+            agentUsers.add(userKey);
+        }
+        if (record.used_cli || record.totals_by_cli) {
+            cliUsers.add(userKey);
+            getOrCreateMapValue(dayCliUserSets, day, () => new Set()).add(userKey);
+            hasCli = true;
+        }
+        if (record.used_copilot_code_review_active) {
+            reviewActiveUsers.add(userKey);
+            getOrCreateMapValue(dayReviewActiveSets, day, () => new Set()).add(userKey);
+            hasCodeReview = true;
+        }
+        if (record.used_copilot_code_review_passive) {
+            reviewPassiveUsers.add(userKey);
+            getOrCreateMapValue(dayReviewPassiveSets, day, () => new Set()).add(userKey);
+            hasCodeReview = true;
+        }
+    });
+
+    const daySet = new Set([
+        ...Array.from(dayOverviewMap.keys()),
+        ...Array.from(dayUserSets.keys()),
+        ...Array.from(dayCliUserSets.keys()),
+        ...Array.from(dayReviewActiveSets.keys()),
+        ...Array.from(dayReviewPassiveSets.keys())
+    ]);
+    const days = Array.from(daySet).filter(Boolean).sort();
+
+    days.forEach(day => {
+        const row = getOrCreateMapValue(dayOverviewMap, day, () => createDailyOverviewRow(day));
+        if (!row.daily_active_users) row.daily_active_users = (dayUserSets.get(day) || new Set()).size;
+        if (!row.daily_active_cli_users) row.daily_active_cli_users = (dayCliUserSets.get(day) || new Set()).size;
+        row.code_review_active_users = (dayReviewActiveSets.get(day) || new Set()).size;
+        row.code_review_passive_users = (dayReviewPassiveSets.get(day) || new Set()).size;
+        if (row.code_review_active_users || row.code_review_passive_users) hasCodeReview = true;
+    });
+
+    const dailyRows = days.map(day => dayOverviewMap.get(day));
+    const weeklyRows = dailyRows.some(row => toNum(row.weekly_active_users) > 0)
+        ? dailyRows.filter(row => toNum(row.weekly_active_users) > 0).map(row => ({ label: row.day, value: toNum(row.weekly_active_users) }))
+        : Array.from(weekUserSets.entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([weekStart, users]) => ({ label: weekStart, value: users.size }));
+
+    const featureRows = sortMetricRows(featureTotals);
+    const ideRows = sortMetricRows(ideTotals);
+    const languageRows = sortMetricRows(languageTotals);
+    const modelRows = sortMetricRows(modelTotals);
+    const cliDayRows = Array.from(cliDayMap.values()).sort((a, b) => a.day.localeCompare(b.day));
+    const pullRequestDayRows = Array.from(pullRequestDayMap.values()).sort((a, b) => a.day.localeCompare(b.day));
+    const codeReviewDayRows = dailyRows
+        .filter(row => row.code_review_active_users || row.code_review_passive_users)
+        .map(row => ({
+            day: row.day,
+            active_users: row.code_review_active_users,
+            passive_users: row.code_review_passive_users
+        }));
+
+    const latestDailyRow = dailyRows[dailyRows.length - 1] || createDailyOverviewRow('');
+    const latestDailyActiveUsers = toNum(latestDailyRow.daily_active_users);
+    const latestWeeklyActiveUsers = toNum(latestDailyRow.weekly_active_users) || (weeklyRows[weeklyRows.length - 1]?.value || 0);
+    const latestMonthlyActiveUsers = toNum(latestDailyRow.monthly_active_users) || uniqueUsers.size || latestDailyActiveUsers;
+    const latestMonthlyChatUsers = toNum(latestDailyRow.monthly_active_chat_users) || chatUsers.size;
+    const latestMonthlyAgentUsers = toNum(latestDailyRow.monthly_active_agent_users) || agentUsers.size;
+    const latestDailyCliUsers = toNum(latestDailyRow.daily_active_cli_users);
+    const acceptanceRate = totalGenerations ? (totalAcceptances / totalGenerations) * 100 : 0;
+
+    const loc = computeLocAggregations(overallRecords);
+    const agentLocBucket = loc?.byFeature.get('agent_edit') || { added: 0, deleted: 0 };
+    const totalLinesChanged = (loc?.totalAdded || 0) + (loc?.totalDeleted || 0);
+    const agentLinesChanged = (agentLocBucket.added || 0) + (agentLocBucket.deleted || 0);
+    const avgChatRequestsPerActiveUser = latestMonthlyActiveUsers ? (totalInteractions / latestMonthlyActiveUsers) : 0;
+    const agentContributionPct = totalLinesChanged ? (agentLinesChanged / totalLinesChanged) * 100 : 0;
+    const averageAgentDeletedPerActiveUser = latestMonthlyActiveUsers ? ((agentLocBucket.deleted || 0) / latestMonthlyActiveUsers) : 0;
+    const mostUsedChatModel = modelRows[0]?.key || 'n/a';
+    const pullRequestTotals = pullRequestDayRows.reduce((acc, row) => ({
+        total_created: acc.total_created + toNum(row.total_created),
+        total_reviewed: acc.total_reviewed + toNum(row.total_reviewed),
+        total_merged: acc.total_merged + toNum(row.total_merged),
+        total_suggestions: acc.total_suggestions + toNum(row.total_suggestions),
+        total_applied_suggestions: acc.total_applied_suggestions + toNum(row.total_applied_suggestions),
+        total_copilot_suggestions: acc.total_copilot_suggestions + toNum(row.total_copilot_suggestions),
+        total_copilot_applied_suggestions: acc.total_copilot_applied_suggestions + toNum(row.total_copilot_applied_suggestions)
+    }), {
+        total_created: 0,
+        total_reviewed: 0,
+        total_merged: 0,
+        total_suggestions: 0,
+        total_applied_suggestions: 0,
+        total_copilot_suggestions: 0,
+        total_copilot_applied_suggestions: 0
+    });
+    const cliTotals = cliDayRows.reduce((acc, row) => ({
+        request_count: acc.request_count + toNum(row.request_count),
+        prompt_count: acc.prompt_count + toNum(row.prompt_count),
+        session_count: acc.session_count + toNum(row.session_count),
+        prompt_tokens_sum: acc.prompt_tokens_sum + toNum(row.prompt_tokens_sum),
+        output_tokens_sum: acc.output_tokens_sum + toNum(row.output_tokens_sum)
+    }), {
+        request_count: 0,
+        prompt_count: 0,
+        session_count: 0,
+        prompt_tokens_sum: 0,
+        output_tokens_sum: 0
+    });
+
+    return {
+        data,
+        userRecords,
+        overallRecords,
+        userRows: aggregateUserUsage(userRecords),
+        meta: {
+            recordCount: data.length,
+            userRecordCount: userRecords.length,
+            aggregateRecordCount: aggregateRecords.length,
+            hasUserRecords: userRecords.length > 0,
+            hasAggregateRecords: aggregateRecords.length > 0,
+            hasCli,
+            hasPullRequests,
+            hasCodeReview,
+            days,
+            latestDay: days[days.length - 1] || '',
+            earliestDay: days[0] || ''
+        },
+        totals: {
+            totalInteractions,
+            totalGenerations,
+            totalAcceptances,
+            acceptanceRate,
+            latestDailyActiveUsers,
+            latestWeeklyActiveUsers,
+            latestMonthlyActiveUsers,
+            latestMonthlyChatUsers,
+            latestMonthlyAgentUsers,
+            latestDailyCliUsers,
+            avgChatRequestsPerActiveUser,
+            mostUsedChatModel,
+            totalLinesChanged,
+            agentLinesChanged,
+            agentContributionPct,
+            averageAgentDeletedPerActiveUser,
+            uniqueUsers: uniqueUsers.size,
+            chatUsers: chatUsers.size,
+            agentUsers: agentUsers.size,
+            cliUsers: cliUsers.size,
+            reviewActiveUsers: reviewActiveUsers.size,
+            reviewPassiveUsers: reviewPassiveUsers.size,
+            pullRequests: pullRequestTotals,
+            cli: cliTotals
+        },
+        breakdowns: {
+            dailyRows,
+            weeklyRows,
+            featureRows,
+            ideRows,
+            languageRows,
+            modelRows,
+            cliDayRows,
+            pullRequestDayRows,
+            codeReviewDayRows
+        },
+        matrices: {
+            dayLanguageMap,
+            dayModelMap,
+            modelFeatureMatrix,
+            languageModelMatrix
+        },
+        loc
+    };
+}
+
+function renderCharts(model) {
+    const chartsContainer = document.getElementById('chartsContainer');
+    if (!chartsContainer) return;
+    chartsContainer.innerHTML = '';
+
+    const usageSectionHasCharts = Boolean(
+        model.breakdowns.dailyRows.length ||
+        model.breakdowns.weeklyRows.length ||
+        model.breakdowns.featureRows.length ||
+        model.breakdowns.languageRows.length ||
+        model.breakdowns.modelRows.length ||
+        model.breakdowns.ideRows.length ||
+        model.userRows.length
     );
-
-    // Daily Active Users
-    const dailyUsers = {};
-    data.forEach(record => {
-        const day = record.day;
-        if (!dailyUsers[day]) {
-            dailyUsers[day] = new Set();
-        }
-        dailyUsers[day].add(record.user_id);
-    });
-    const dailyUserCounts = Object.keys(dailyUsers).map(day => dailyUsers[day].size);
-    createChart('Daily Active Users', 'line', Object.keys(dailyUsers), dailyUserCounts);
-
-    // Model Usage
-    const modelUsage = {};
-    data.forEach(record => {
-        if (record.totals_by_model_feature) {
-            record.totals_by_model_feature.forEach(modelFeature => {
-                const model = modelFeature.model || 'unknown';
-                if (!modelUsage[model]) {
-                    modelUsage[model] = 0;
-                }
-                modelUsage[model] += modelFeature.user_initiated_interaction_count;
-            });
-        }
-    });
-    createChart('Model Usage', 'pie', Object.keys(modelUsage), Object.values(modelUsage));
-
-    // Feature Usage (with pretty names)
-    const featureUsage = {};
-    data.forEach(record => {
-        if (record.totals_by_feature) {
-            record.totals_by_feature.forEach(feature => {
-                const featureName = feature.feature;
-                if (!featureUsage[featureName]) {
-                    featureUsage[featureName] = 0;
-                }
-                featureUsage[featureName] += feature.user_initiated_interaction_count;
-            });
-        }
-    });
-    createChart('Feature Usage', 'bar', Object.keys(featureUsage).map(formatFeatureName), Object.values(featureUsage));
-
-    // Acceptance Rate by User (top N to keep chart readable)
-    const acceptanceRateByUser = [];
-    Object.keys(completions).forEach(u => {
-        const gen = completions[u] || 0;
-        const acc = acceptances[u] || 0;
-        const rate = gen ? (acc / gen) * 100 : 0;
-        acceptanceRateByUser.push({ user: u, rate });
-    });
-    acceptanceRateByUser.sort((a,b) => b.rate - a.rate);
-    const topRateUsers = acceptanceRateByUser.slice(0, 10); // top 10
-    createChart('Acceptance Rate % (Top 10 Users)', 'bar', topRateUsers.map(r => r.user), topRateUsers.map(r => +r.rate.toFixed(1)));
-
-    // Heatmap: Language vs Model (using totals_by_language_model if present)
-    const langModelMatrix = {}; // lang -> model -> generations
-    data.forEach(record => {
-        if (record.totals_by_language_model) {
-            record.totals_by_language_model.forEach(lm => {
-                const lang = lm.language || 'unknown';
-                const model = lm.model || 'unknown';
-                if (!langModelMatrix[lang]) langModelMatrix[lang] = {};
-                langModelMatrix[lang][model] = (langModelMatrix[lang][model] || 0) + (lm.code_generation_activity_count || 0);
-            });
-        }
-    });
-    const langCategories = Object.keys(langModelMatrix).slice(0, 40); // limit to 40 languages
-    const modelSet = new Set();
-    langCategories.forEach(lang => Object.keys(langModelMatrix[lang]).forEach(m => modelSet.add(m)));
-    const modelCategories = Array.from(modelSet);
-    const heatmapData = [];
-    langCategories.forEach((lang, i) => {
-        modelCategories.forEach((model, j) => {
-            const val = langModelMatrix[lang][model] || 0;
-            heatmapData.push([j, i, val]);
-        });
-    });
-    createHeatmap('Code Generations: Language vs Model', modelCategories, langCategories, heatmapData, 'Generations');
-
-    // Heatmap: Feature vs Model (using totals_by_model_feature or totals_by_feature with model unknown)
-    const featureModelMatrix = {}; // feature -> model -> interactions
-    data.forEach(record => {
-        if (record.totals_by_model_feature) {
-            record.totals_by_model_feature.forEach(mf => {
-                const model = mf.model || 'unknown';
-                const feature = mf.feature || 'unknown';
-                if (!featureModelMatrix[feature]) featureModelMatrix[feature] = {};
-                featureModelMatrix[feature][model] = (featureModelMatrix[feature][model] || 0) + (mf.user_initiated_interaction_count || 0);
-            });
-        } else if (record.totals_by_feature) {
-            // fallback: aggregate without model detail
-            record.totals_by_feature.forEach(f => {
-                const feature = f.feature || 'unknown';
-                if (!featureModelMatrix[feature]) featureModelMatrix[feature] = {};
-                featureModelMatrix[feature]['(all models)'] = (featureModelMatrix[feature]['(all models)'] || 0) + (f.user_initiated_interaction_count || 0);
-            });
-        }
-    });
-    const featureCategories = Object.keys(featureModelMatrix); // raw keys
-    const modelSet2 = new Set();
-    featureCategories.forEach(f => Object.keys(featureModelMatrix[f]).forEach(m => modelSet2.add(m)));
-    const modelCategories2 = Array.from(modelSet2);
-    const heatmapData2 = [];
-    featureCategories.forEach((f, i) => {
-        modelCategories2.forEach((m, j) => {
-            const val = featureModelMatrix[f][m] || 0;
-            heatmapData2.push([j, i, val]);
-        });
-    });
-    createHeatmap('Interactions: Feature vs Model', modelCategories2, featureCategories.map(formatFeatureName), heatmapData2, 'Interactions');
-
-    // ===== Additional Metrics & Visualizations =====
-    // Overall language usage (interactions) leveraging totals_by_language_feature
-    const languageInteractions = {};
-    data.forEach(r => {
-        if (r.totals_by_language_feature) {
-            r.totals_by_language_feature.forEach(lf => {
-                const lang = lf.language || 'unknown';
-                const val = (lf.user_initiated_interaction_count || lf.code_generation_activity_count || 0);
-                languageInteractions[lang] = (languageInteractions[lang] || 0) + val;
-            });
-        }
-    });
-    if (Object.keys(languageInteractions).length) {
-        createChart('Language Usage (Interactions)', 'pie', Object.keys(languageInteractions), Object.values(languageInteractions));
+    if (usageSectionHasCharts) {
+        appendChartSectionHeading('Adoption, usage, and chat', 'Current usage views follow the latest Copilot dashboard metrics and filter with the loaded export.');
     }
 
-    // Language usage per day (top 8 + other) stacked area
-    const langDayMap = {}; // day -> lang -> count
-    const langTotals = {};
-    data.forEach(r => {
-        const day = r.day || 'unknown';
-        if (!langDayMap[day]) langDayMap[day] = {};
-        if (r.totals_by_language_feature) {
-            r.totals_by_language_feature.forEach(lf => {
-                const lang = lf.language || 'unknown';
-                const val = (lf.code_generation_activity_count || lf.user_initiated_interaction_count || 0);
-                langDayMap[day][lang] = (langDayMap[day][lang] || 0) + val;
-                langTotals[lang] = (langTotals[lang] || 0) + val;
-            });
+    const chatModeRows = buildTopRows(
+        model.breakdowns.featureRows.filter(row => CHAT_MODE_FEATURES.includes(row.key)),
+        row => row.interactions || row.generations,
+        8
+    );
+    if (chatModeRows.length) {
+        createChart('Requests by Chat Mode', 'column', chatModeRows.map(row => formatFeatureName(row.key)), chatModeRows.map(row => row.interactions || row.generations));
+    }
+
+    const modelUsageRows = buildTopRows(model.breakdowns.modelRows, row => metricPrimaryValue(row), 8);
+    if (modelUsageRows.length) {
+        createChart('Model Usage', 'doughnut', modelUsageRows.map(row => row.key), modelUsageRows.map(row => metricPrimaryValue(row)));
+    }
+
+    const modelDaySeries = buildSeriesFromDayMatrix(model.matrices.dayModelMap, 8);
+    if (modelDaySeries.categories.length) {
+        createStackedChart('Model Usage per Day', modelDaySeries.categories, modelDaySeries.series, 'area');
+    }
+
+    const modelFeatureRows = buildMatrixRows(model.matrices.modelFeatureMatrix, 8);
+    if (modelFeatureRows.outerKeys.length && modelFeatureRows.innerKeys.length) {
+        const series = modelFeatureRows.innerKeys.map(modelKey => ({
+            name: modelKey,
+            data: modelFeatureRows.outerKeys.map(featureKey => model.matrices.modelFeatureMatrix.get(featureKey)?.get(modelKey) || 0)
+        }));
+        createStackedChart('Model Usage per Chat Mode', modelFeatureRows.outerKeys.map(formatFeatureName), series, 'column');
+    }
+
+    const languageUsageRows = buildTopRows(model.breakdowns.languageRows, row => metricPrimaryValue(row), 8);
+    if (languageUsageRows.length) {
+        createChart('Language Usage', 'pie', languageUsageRows.map(row => row.key), languageUsageRows.map(row => metricPrimaryValue(row)));
+    }
+
+    const languageDaySeries = buildSeriesFromDayMatrix(model.matrices.dayLanguageMap, 8);
+    if (languageDaySeries.categories.length) {
+        createStackedChart('Language Usage per Day', languageDaySeries.categories, languageDaySeries.series, 'area');
+    }
+
+    const languageModelRows = buildHeatmapRows(model.matrices.languageModelMatrix, 24);
+    if (languageModelRows.xCategories.length && languageModelRows.yCategories.length) {
+        createHeatmap('Language Usage by Model', languageModelRows.xCategories, languageModelRows.yCategories, languageModelRows.points, 'Usage');
+    }
+
+    if (model.breakdowns.ideRows.length) {
+        const ideRows = buildTopRows(model.breakdowns.ideRows, row => metricPrimaryValue(row), 8);
+        createChart('IDE Usage', 'doughnut', ideRows.map(row => row.key), ideRows.map(row => metricPrimaryValue(row)));
+    }
+
+    if (model.breakdowns.dailyRows.length) {
+        createChart('Daily Active Users', 'line', model.breakdowns.dailyRows.map(row => row.day), model.breakdowns.dailyRows.map(row => row.daily_active_users));
+    }
+
+    if (model.breakdowns.weeklyRows.length) {
+        createChart('Weekly Active Users', 'line', model.breakdowns.weeklyRows.map(row => row.label), model.breakdowns.weeklyRows.map(row => row.value));
+    }
+
+    if (model.userRows.length) {
+        const topInteractionUsers = buildTopRows(model.userRows, row => row.interactions, 10);
+        if (topInteractionUsers.length) {
+            createChart('Top Users by Interaction Count', 'bar', topInteractionUsers.map(row => row.user_login), topInteractionUsers.map(row => row.interactions));
         }
-    });
-    const topLangs = Object.entries(langTotals).sort((a,b)=>b[1]-a[1]).slice(0,8).map(x=>x[0]);
-    const langDays = Object.keys(langDayMap).sort();
-    if (langDays.length) {
-        const langSeries = topLangs.map(lang => ({ name: lang, data: langDays.map(d => langDayMap[d][lang] || 0) }));
-        const otherData = langDays.map(d => { let sum=0; Object.keys(langDayMap[d]).forEach(l => { if(!topLangs.includes(l)) sum += langDayMap[d][l]; }); return sum; });
-        langSeries.push({ name: 'Other', data: otherData });
-        createStackedChart('Language Usage Per Day (Top 8 + Other)', langDays, langSeries, 'area');
-    }
 
-    // Model usage per day (chat requests)
-    const modelDayMap = {}; // day -> model -> count
-    const modelTotalsDay = {};
-    data.forEach(r => {
-        const day = r.day || 'unknown';
-        if (!modelDayMap[day]) modelDayMap[day] = {};
-        if (r.totals_by_model_feature) {
-            r.totals_by_model_feature.forEach(mf => {
-                const model = mf.model || 'unknown';
-                const val = mf.user_initiated_interaction_count || 0;
-                modelDayMap[day][model] = (modelDayMap[day][model] || 0) + val;
-                modelTotalsDay[model] = (modelTotalsDay[model] || 0) + val;
-            });
+        const topCompletionUsers = buildTopRows(model.userRows, row => row.completions, 10);
+        if (topCompletionUsers.length) {
+            createGroupedBarChart('Completions vs Acceptances (Top Users)', topCompletionUsers.map(row => row.user_login), [
+                { label: 'Completions', data: topCompletionUsers.map(row => row.completions) },
+                { label: 'Acceptances', data: topCompletionUsers.map(row => row.acceptances) }
+            ]);
         }
-    });
-    const topModels = Object.entries(modelTotalsDay).sort((a,b)=>b[1]-a[1]).slice(0,8).map(x=>x[0]);
-    const modelDays = Object.keys(modelDayMap).sort();
-    if (modelDays.length) {
-        const modelSeries = topModels.map(m => ({ name: m, data: modelDays.map(d => modelDayMap[d][m] || 0) }));
-        const otherModelData = modelDays.map(d => { let sum=0; Object.keys(modelDayMap[d]).forEach(mm => { if(!topModels.includes(mm)) sum += modelDayMap[d][mm]; }); return sum; });
-        modelSeries.push({ name: 'Other', data: otherModelData });
-        createStackedChart('Model Usage Per Day (Chat Requests)', modelDays, modelSeries, 'area');
+
+        const topRateUsers = buildTopRows(model.userRows.filter(row => row.completions > 0), row => row.acceptance_rate, 10);
+        if (topRateUsers.length) {
+            createChart('Acceptance Rate % (Top Users)', 'bar', topRateUsers.map(row => row.user_login), topRateUsers.map(row => +row.acceptance_rate.toFixed(1)));
+        }
     }
 
-    // Model usage per feature (stacked column)
-    if (featureCategories.length && modelCategories2.length) {
-        const stackedSeries = modelCategories2.map(model => ({ name: model, data: featureCategories.map(f => featureModelMatrix[f][model] || 0) }));
-        createStackedChart('Model Usage per Feature', featureCategories.map(formatFeatureName), stackedSeries, 'column');
+    const codeGenerationSectionHasCharts = Boolean(
+        model.loc ||
+        model.breakdowns.languageRows.some(row => row.user_loc_changed || row.agent_loc_changed) ||
+        model.breakdowns.modelRows.some(row => row.user_loc_changed || row.agent_loc_changed)
+    );
+    if (codeGenerationSectionHasCharts) {
+        appendChartSectionHeading('Code generation', 'These views separate suggestion metrics from actual code changes, including user-initiated versus agent-initiated edits.');
     }
 
-    // Weekly active users (unique user IDs per ISO week start Monday)
-    const weekMap = {}; // weekStart -> Set(user)
-    data.forEach(r => {
-        if (!r.day) return; const date = new Date(r.day + 'T00:00:00Z');
-        const dayNum = date.getUTCDay();
-        const diffToMonday = (dayNum + 6) % 7; // Monday baseline
-        const monday = new Date(date); monday.setUTCDate(date.getUTCDate() - diffToMonday);
-        const key = monday.toISOString().substring(0,10);
-        if (!weekMap[key]) weekMap[key] = new Set();
-        weekMap[key].add(r.user_id);
-    });
-    const weekKeys = Object.keys(weekMap).sort();
-    if (weekKeys.length) {
-        const weekCounts = weekKeys.map(k => weekMap[k].size);
-        createChart('Weekly Active Users', 'line', weekKeys, weekCounts);
+    if (model.breakdowns.dailyRows.length) {
+        createStackedChart('Daily Lines Added and Deleted', model.breakdowns.dailyRows.map(row => row.day), [
+            { name: 'LoC Added', data: model.breakdowns.dailyRows.map(row => row.loc_added) },
+            { name: 'LoC Deleted', data: model.breakdowns.dailyRows.map(row => row.loc_deleted) }
+        ], 'area');
     }
 
-    // New LoC charts
-    const locAgg = computeLocAggregations(data);
-    if (locAgg) {
-        const featureCats = Array.from(locAgg.byFeature.keys());
-        if (featureCats.length) {
-            const sugg = featureCats.map(f => locAgg.byFeature.get(f).suggestAdd || 0);
-            const add = featureCats.map(f => locAgg.byFeature.get(f).added || 0);
-            const del = featureCats.map(f => locAgg.byFeature.get(f).deleted || 0);
-            // Stacked columns: suggested vs edits (added+deleted)
-            const series = [
-                { name: 'LoC Suggested (Add)', data: sugg },
-                { name: 'LoC Added (Edits)', data: add },
-                { name: 'LoC Deleted (Edits)', data: del }
-            ];
-            createStackedChart('LoC by Feature (Suggested vs Edits)', featureCats.map(formatFeatureName), series, 'column');
+    if (model.loc) {
+        const featureKeys = Array.from(model.loc.byFeature.keys());
+        if (featureKeys.length) {
+            createStackedChart('LoC by Feature (Suggested vs Changed)', featureKeys.map(formatFeatureName), [
+                { name: 'LoC Suggested to Add', data: featureKeys.map(key => model.loc.byFeature.get(key).suggestAdd || 0) },
+                { name: 'LoC Added', data: featureKeys.map(key => model.loc.byFeature.get(key).added || 0) },
+                { name: 'LoC Deleted', data: featureKeys.map(key => model.loc.byFeature.get(key).deleted || 0) }
+            ], 'column');
 
-            // Separate chart for LoC Suggested (Delete) by feature (show only if meaningful)
-            const suggDel = featureCats.map(f => locAgg.byFeature.get(f).suggestDel || 0);
-            const hasSuggDel = suggDel.some(v => v > 0);
-            if (hasSuggDel) {
-                createChart('LoC Suggested (Delete) by Feature', 'column', featureCats.map(formatFeatureName), suggDel);
+            const suggestedDelete = featureKeys.map(key => model.loc.byFeature.get(key).suggestDel || 0);
+            if (suggestedDelete.some(value => value > 0)) {
+                createChart('LoC Suggested to Delete by Feature', 'column', featureKeys.map(formatFeatureName), suggestedDelete);
             }
         }
-        const langCats = Array.from(locAgg.byLanguage.keys());
-        if (langCats.length) {
-            const addL = langCats.map(l => locAgg.byLanguage.get(l).added || 0);
-            const delL = langCats.map(l => locAgg.byLanguage.get(l).deleted || 0);
-            const series2 = [
-                { name: 'LoC Added', data: addL },
-                { name: 'LoC Deleted', data: delL }
-            ];
-            createStackedChart('LoC by Language (Edits)', langCats, series2, 'column');
-        }
+    }
 
-        // Agent vs Non-Agent LoC (Edits)
-        if ((locAgg.totalAdded || 0) + (locAgg.totalDeleted || 0)) {
-            const agentBucket = locAgg.byFeature.get('agent_edit') || { added: 0, deleted: 0 };
-            const agentAdded = agentBucket.added || 0;
-            const agentDeleted = agentBucket.deleted || 0;
-            const nonAgentAdded = Math.max(0, (locAgg.totalAdded || 0) - agentAdded);
-            const nonAgentDeleted = Math.max(0, (locAgg.totalDeleted || 0) - agentDeleted);
-            const categories = ['LoC Added', 'LoC Deleted'];
-            const datasets = [
-                { label: 'Agent Edit', data: [agentAdded, agentDeleted] },
-                { label: 'Non-Agent', data: [nonAgentAdded, nonAgentDeleted] }
-            ];
-            createGroupedBarChart('LoC: Agent vs Non-Agent (Edits)', categories, datasets);
+    if (model.loc && model.totals.totalLinesChanged > 0) {
+        const agentBucket = model.loc.byFeature.get('agent_edit') || { added: 0, deleted: 0 };
+        const userAdded = Math.max(0, (model.loc.totalAdded || 0) - (agentBucket.added || 0));
+        const userDeleted = Math.max(0, (model.loc.totalDeleted || 0) - (agentBucket.deleted || 0));
+        createGroupedBarChart('User vs Agent Code Changes', ['LoC Added', 'LoC Deleted'], [
+            { label: 'User initiated', data: [userAdded, userDeleted] },
+            { label: 'Agent initiated', data: [agentBucket.added || 0, agentBucket.deleted || 0] }
+        ]);
+    }
+
+    const userLocByModel = buildTopRows(model.breakdowns.modelRows.filter(row => row.user_loc_changed > 0), row => row.user_loc_changed, 10);
+    if (userLocByModel.length) {
+        createChart('User-Initiated Code Changes per Model', 'bar', userLocByModel.map(row => row.key), userLocByModel.map(row => row.user_loc_changed));
+    }
+
+    const agentLocByModel = buildTopRows(model.breakdowns.modelRows.filter(row => row.agent_loc_changed > 0), row => row.agent_loc_changed, 10);
+    if (agentLocByModel.length) {
+        createChart('Agent-Initiated Code Changes per Model', 'bar', agentLocByModel.map(row => row.key), agentLocByModel.map(row => row.agent_loc_changed));
+    }
+
+    const userLocByLanguage = buildTopRows(model.breakdowns.languageRows.filter(row => row.user_loc_changed > 0), row => row.user_loc_changed, 10);
+    if (userLocByLanguage.length) {
+        createChart('User-Initiated Code Changes per Language', 'bar', userLocByLanguage.map(row => row.key), userLocByLanguage.map(row => row.user_loc_changed));
+    }
+
+    const agentLocByLanguage = buildTopRows(model.breakdowns.languageRows.filter(row => row.agent_loc_changed > 0), row => row.agent_loc_changed, 10);
+    if (agentLocByLanguage.length) {
+        createChart('Agent-Initiated Code Changes per Language', 'bar', agentLocByLanguage.map(row => row.key), agentLocByLanguage.map(row => row.agent_loc_changed));
+    }
+
+    const opsSectionHasCharts = Boolean(
+        model.breakdowns.cliDayRows.length ||
+        model.breakdowns.codeReviewDayRows.length ||
+        model.breakdowns.pullRequestDayRows.length ||
+        model.totals.latestDailyCliUsers
+    );
+    if (opsSectionHasCharts) {
+        appendChartSectionHeading('CLI, code review, and pull requests', 'New operational views surface CLI activity, code review adoption, and pull request lifecycle metrics when present in the export.');
+    }
+
+    if (model.breakdowns.dailyRows.some(row => row.daily_active_cli_users > 0)) {
+        createChart('Daily Active CLI Users', 'line', model.breakdowns.dailyRows.map(row => row.day), model.breakdowns.dailyRows.map(row => row.daily_active_cli_users));
+    }
+
+    if (model.breakdowns.cliDayRows.length) {
+        createStackedChart('Copilot CLI Requests, Prompts, and Sessions', model.breakdowns.cliDayRows.map(row => row.day), [
+            { name: 'Requests', data: model.breakdowns.cliDayRows.map(row => row.request_count) },
+            { name: 'Prompts', data: model.breakdowns.cliDayRows.map(row => row.prompt_count) },
+            { name: 'Sessions', data: model.breakdowns.cliDayRows.map(row => row.session_count) }
+        ], 'column', null);
+    }
+
+    if (model.breakdowns.codeReviewDayRows.length) {
+        createStackedChart('Copilot Code Review Activity', model.breakdowns.codeReviewDayRows.map(row => row.day), [
+            { name: 'Active users', data: model.breakdowns.codeReviewDayRows.map(row => row.active_users) },
+            { name: 'Passive users', data: model.breakdowns.codeReviewDayRows.map(row => row.passive_users) }
+        ], 'column', null);
+    }
+
+    if (model.breakdowns.pullRequestDayRows.length) {
+        createStackedChart('Pull Request Activity', model.breakdowns.pullRequestDayRows.map(row => row.day), [
+            { name: 'Created', data: model.breakdowns.pullRequestDayRows.map(row => row.total_created) },
+            { name: 'Reviewed', data: model.breakdowns.pullRequestDayRows.map(row => row.total_reviewed) },
+            { name: 'Merged', data: model.breakdowns.pullRequestDayRows.map(row => row.total_merged) }
+        ], 'column', null);
+
+        const suggestionRows = model.breakdowns.pullRequestDayRows.filter(row =>
+            row.total_suggestions ||
+            row.total_applied_suggestions ||
+            row.total_copilot_suggestions ||
+            row.total_copilot_applied_suggestions
+        );
+        if (suggestionRows.length) {
+            createStackedChart('Pull Request Suggestions', suggestionRows.map(row => row.day), [
+                { name: 'Suggestions', data: suggestionRows.map(row => row.total_suggestions) },
+                { name: 'Applied suggestions', data: suggestionRows.map(row => row.total_applied_suggestions) },
+                { name: 'Copilot suggestions', data: suggestionRows.map(row => row.total_copilot_suggestions) },
+                { name: 'Copilot applied suggestions', data: suggestionRows.map(row => row.total_copilot_applied_suggestions) }
+            ], 'column', null);
         }
     }
+}
+
+function renderReferenceTables(model) {
+    const section = document.getElementById('tablesSection');
+    const container = document.getElementById('tablesContainer');
+    if (!section || !container) return;
+
+    const blocks = [];
+    const dailyRows = [...model.breakdowns.dailyRows].reverse();
+    if (dailyRows.length) {
+        blocks.push(renderTableBlock(
+            'Daily overview',
+            'Latest daily, weekly, and monthly active-user values plus code generation and LoC totals for each day.',
+            [
+                { key: 'day', label: 'Day' },
+                { key: 'daily_active_users', label: 'Daily active', type: 'number' },
+                { key: 'weekly_active_users', label: 'Weekly active', type: 'number' },
+                { key: 'monthly_active_users', label: 'Monthly active', type: 'number' },
+                { key: 'monthly_active_chat_users', label: 'Monthly chat', type: 'number' },
+                { key: 'monthly_active_agent_users', label: 'Monthly agent', type: 'number' },
+                { key: 'daily_active_cli_users', label: 'Daily CLI active', type: 'number' },
+                { key: 'interactions', label: 'Interactions', type: 'number' },
+                { key: 'code_generations', label: 'Generations', type: 'number' },
+                { key: 'acceptances', label: 'Acceptances', type: 'number' },
+                { key: 'loc_suggested_add', label: 'LoC suggested add', type: 'number' },
+                { key: 'loc_added', label: 'LoC added', type: 'number' },
+                { key: 'loc_deleted', label: 'LoC deleted', type: 'number' }
+            ],
+            dailyRows,
+            true
+        ));
+    }
+
+    if (model.breakdowns.featureRows.length) {
+        blocks.push(renderTableBlock(
+            'Feature breakdown',
+            'Copilot feature totals, including chat modes and the agent-edit feature used for direct file changes.',
+            [
+                { key: 'key', label: 'Feature', render: value => escapeHtml(formatFeatureName(value)) },
+                { key: 'interactions', label: 'Interactions', type: 'number' },
+                { key: 'generations', label: 'Generations', type: 'number' },
+                { key: 'acceptances', label: 'Acceptances', type: 'number' },
+                { key: 'loc_suggested_add', label: 'LoC suggested add', type: 'number' },
+                { key: 'loc_suggested_delete', label: 'LoC suggested delete', type: 'number' },
+                { key: 'loc_added', label: 'LoC added', type: 'number' },
+                { key: 'loc_deleted', label: 'LoC deleted', type: 'number' }
+            ],
+            model.breakdowns.featureRows
+        ));
+    }
+
+    if (model.breakdowns.languageRows.length) {
+        blocks.push(renderTableBlock(
+            'Language breakdown',
+            'Usage, generation, acceptance, and user-versus-agent code change totals grouped by language.',
+            [
+                { key: 'key', label: 'Language' },
+                { key: 'interactions', label: 'Interactions', type: 'number' },
+                { key: 'generations', label: 'Generations', type: 'number' },
+                { key: 'acceptances', label: 'Acceptances', type: 'number' },
+                { key: 'user_loc_changed', label: 'User-changed LoC', type: 'number' },
+                { key: 'agent_loc_changed', label: 'Agent-changed LoC', type: 'number' },
+                { key: 'loc_added', label: 'LoC added', type: 'number' },
+                { key: 'loc_deleted', label: 'LoC deleted', type: 'number' }
+            ],
+            model.breakdowns.languageRows
+        ));
+    }
+
+    if (model.breakdowns.modelRows.length) {
+        blocks.push(renderTableBlock(
+            'Model breakdown',
+            'Usage, code generation, and code change totals grouped by model.',
+            [
+                { key: 'key', label: 'Model' },
+                { key: 'interactions', label: 'Interactions', type: 'number' },
+                { key: 'generations', label: 'Generations', type: 'number' },
+                { key: 'acceptances', label: 'Acceptances', type: 'number' },
+                { key: 'user_loc_changed', label: 'User-changed LoC', type: 'number' },
+                { key: 'agent_loc_changed', label: 'Agent-changed LoC', type: 'number' },
+                { key: 'loc_added', label: 'LoC added', type: 'number' },
+                { key: 'loc_deleted', label: 'LoC deleted', type: 'number' }
+            ],
+            model.breakdowns.modelRows
+        ));
+    }
+
+    if (model.breakdowns.ideRows.length) {
+        blocks.push(renderTableBlock(
+            'IDE breakdown',
+            'IDE usage with the latest observed IDE and plugin versions available in the export.',
+            [
+                { key: 'key', label: 'IDE' },
+                { key: 'interactions', label: 'Interactions', type: 'number' },
+                { key: 'generations', label: 'Generations', type: 'number' },
+                { key: 'acceptances', label: 'Acceptances', type: 'number' },
+                { key: 'latest_ide_version', label: 'Latest IDE version' },
+                { key: 'latest_plugin_version', label: 'Latest plugin version' }
+            ],
+            model.breakdowns.ideRows
+        ));
+    }
+
+    if (model.breakdowns.cliDayRows.length) {
+        blocks.push(renderTableBlock(
+            'CLI activity',
+            'Daily Copilot CLI usage, requests, sessions, tokens, and the latest detected CLI version.',
+            [
+                { key: 'day', label: 'Day' },
+                { key: 'request_count', label: 'Requests', type: 'number' },
+                { key: 'prompt_count', label: 'Prompts', type: 'number' },
+                { key: 'session_count', label: 'Sessions', type: 'number' },
+                { key: 'prompt_tokens_sum', label: 'Prompt tokens', type: 'number' },
+                { key: 'output_tokens_sum', label: 'Output tokens', type: 'number' },
+                { key: 'avg_tokens_per_request', label: 'Avg tokens/request', type: 'decimal' },
+                { key: 'latest_cli_version', label: 'Latest CLI version' }
+            ],
+            [...model.breakdowns.cliDayRows].reverse()
+        ));
+    }
+
+    if (model.breakdowns.codeReviewDayRows.length) {
+        blocks.push(renderTableBlock(
+            'Code review activity',
+            'Daily counts of users who actively engaged with Copilot code review or had passive Copilot review activity.',
+            [
+                { key: 'day', label: 'Day' },
+                { key: 'active_users', label: 'Active users', type: 'number' },
+                { key: 'passive_users', label: 'Passive users', type: 'number' }
+            ],
+            [...model.breakdowns.codeReviewDayRows].reverse()
+        ));
+    }
+
+    if (model.breakdowns.pullRequestDayRows.length) {
+        blocks.push(renderTableBlock(
+            'Pull request activity',
+            'Daily pull request lifecycle metrics, including Copilot-authored and Copilot-reviewed activity when present.',
+            [
+                { key: 'day', label: 'Day' },
+                { key: 'total_created', label: 'Created', type: 'number' },
+                { key: 'total_reviewed', label: 'Reviewed', type: 'number' },
+                { key: 'total_merged', label: 'Merged', type: 'number' },
+                { key: 'median_minutes_to_merge', label: 'Median minutes to merge', type: 'decimal' },
+                { key: 'total_suggestions', label: 'Suggestions', type: 'number' },
+                { key: 'total_applied_suggestions', label: 'Applied suggestions', type: 'number' },
+                { key: 'total_created_by_copilot', label: 'Created by Copilot', type: 'number' },
+                { key: 'total_reviewed_by_copilot', label: 'Reviewed by Copilot', type: 'number' },
+                { key: 'total_merged_created_by_copilot', label: 'Merged created by Copilot', type: 'number' },
+                { key: 'total_merged_reviewed_by_copilot', label: 'Merged reviewed by Copilot', type: 'number' },
+                { key: 'total_copilot_suggestions', label: 'Copilot suggestions', type: 'number' },
+                { key: 'total_copilot_applied_suggestions', label: 'Copilot applied suggestions', type: 'number' }
+            ],
+            [...model.breakdowns.pullRequestDayRows].reverse()
+        ));
+    }
+
+    if (!blocks.length) {
+        section.hidden = true;
+        container.innerHTML = '';
+        return;
+    }
+
+    section.hidden = false;
+    container.innerHTML = blocks.join('');
+}
+
+function renderTableBlock(title, note, columns, rows, open = false) {
+    return `<details class="data-table-block"${open ? ' open' : ''}>
+        <summary>
+            <div>
+                <h3 class="data-table-title">${escapeHtml(title)}</h3>
+                <p class="data-table-note">${escapeHtml(note)}</p>
+            </div>
+        </summary>
+        <div class="data-table-content">
+            <div class="data-table-scroll">
+                ${renderStaticTable(title, note, columns, rows)}
+            </div>
+        </div>
+    </details>`;
+}
+
+function renderStaticTable(title, note, columns, rows) {
+    const caption = `<caption class="visually-hidden">${escapeHtml(title)}. ${escapeHtml(note)}</caption>`;
+    const head = columns.map(column => `<th scope="col">${escapeHtml(column.label)}</th>`).join('');
+    const body = rows.map(row => `<tr>${columns.map((column, index) => index === 0
+        ? `<th scope="row">${formatTableCell(row[column.key], column, row)}</th>`
+        : `<td>${formatTableCell(row[column.key], column, row)}</td>`).join('')}</tr>`).join('');
+    return `<table class="usage-table">${caption}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function formatTableCell(value, column, row) {
+    if (column.render) return column.render(value, row);
+    if (value === null || value === undefined || value === '') return '&mdash;';
+    if (column.type === 'number') return escapeHtml(Number(value).toLocaleString());
+    if (column.type === 'decimal') return escapeHtml(Number(value).toFixed(1));
+    return escapeHtml(value);
+}
+
+function appendChartSectionHeading(title, note) {
+    const chartsContainer = document.getElementById('chartsContainer');
+    if (!chartsContainer) return;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'charts-section-heading';
+    wrapper.innerHTML = `<h3>${escapeHtml(title)}</h3><p>${escapeHtml(note)}</p>`;
+    chartsContainer.appendChild(wrapper);
+}
+
+function buildTopRows(rows, getValue, limit = 10) {
+    return [...rows]
+        .filter(row => getValue(row) > 0)
+        .sort((a, b) => getValue(b) - getValue(a))
+        .slice(0, limit);
+}
+
+function buildSeriesFromDayMatrix(dayMap, limit = 8) {
+    const categories = Array.from(dayMap.keys()).sort();
+    const totals = {};
+    dayMap.forEach(dayEntries => {
+        dayEntries.forEach((value, key) => {
+            totals[key] = (totals[key] || 0) + value;
+        });
+    });
+    const topKeys = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, limit).map(entry => entry[0]);
+    if (!categories.length || !topKeys.length) return { categories: [], series: [] };
+    const series = topKeys.map(key => ({
+        name: key,
+        data: categories.map(day => dayMap.get(day)?.get(key) || 0)
+    }));
+    const otherData = categories.map(day => {
+        let sum = 0;
+        (dayMap.get(day) || new Map()).forEach((value, key) => {
+            if (!topKeys.includes(key)) sum += value;
+        });
+        return sum;
+    });
+    if (otherData.some(value => value > 0)) {
+        series.push({ name: 'Other', data: otherData });
+    }
+    return { categories, series };
+}
+
+function buildMatrixRows(matrixMap, limitRows = 8) {
+    const outerKeys = Array.from(matrixMap.keys())
+        .sort((a, b) => sumNestedMap(matrixMap.get(b)) - sumNestedMap(matrixMap.get(a)))
+        .slice(0, limitRows);
+    const innerKeySet = new Set();
+    outerKeys.forEach(key => {
+        (matrixMap.get(key) || new Map()).forEach((_, innerKey) => innerKeySet.add(innerKey));
+    });
+    const innerKeys = Array.from(innerKeySet);
+    return { outerKeys, innerKeys };
+}
+
+function buildHeatmapRows(matrixMap, limitRows = 24) {
+    const yKeys = Array.from(matrixMap.keys())
+        .sort((a, b) => sumNestedMap(matrixMap.get(b)) - sumNestedMap(matrixMap.get(a)))
+        .slice(0, limitRows);
+    const xKeySet = new Set();
+    yKeys.forEach(key => {
+        (matrixMap.get(key) || new Map()).forEach((_, innerKey) => xKeySet.add(innerKey));
+    });
+    const xCategories = Array.from(xKeySet);
+    const points = [];
+    yKeys.forEach((yKey, yIndex) => {
+        xCategories.forEach((xKey, xIndex) => {
+            points.push([xIndex, yIndex, matrixMap.get(yKey)?.get(xKey) || 0]);
+        });
+    });
+    return { xCategories, yCategories: yKeys, points };
+}
+
+function isUserLevelRecord(record) {
+    return Boolean(record && (record.__record_scope === 'user' || record.user_id || record.user_login));
+}
+
+function createDailyOverviewRow(day) {
+    return {
+        day,
+        daily_active_users: 0,
+        weekly_active_users: 0,
+        monthly_active_users: 0,
+        monthly_active_chat_users: 0,
+        monthly_active_agent_users: 0,
+        daily_active_cli_users: 0,
+        code_review_active_users: 0,
+        code_review_passive_users: 0,
+        interactions: 0,
+        code_generations: 0,
+        acceptances: 0,
+        loc_suggested_add: 0,
+        loc_suggested_delete: 0,
+        loc_added: 0,
+        loc_deleted: 0
+    };
+}
+
+function createCliDayRow(day) {
+    return {
+        day,
+        request_count: 0,
+        prompt_count: 0,
+        session_count: 0,
+        prompt_tokens_sum: 0,
+        output_tokens_sum: 0,
+        avg_tokens_per_request: 0,
+        latest_cli_version: ''
+    };
+}
+
+function createPullRequestDayRow(day) {
+    return {
+        day,
+        total_created: 0,
+        total_reviewed: 0,
+        total_merged: 0,
+        median_minutes_to_merge: 0,
+        total_suggestions: 0,
+        total_applied_suggestions: 0,
+        total_created_by_copilot: 0,
+        total_reviewed_by_copilot: 0,
+        total_merged_created_by_copilot: 0,
+        total_merged_reviewed_by_copilot: 0,
+        median_minutes_to_merge_copilot_authored: 0,
+        total_copilot_suggestions: 0,
+        total_copilot_applied_suggestions: 0
+    };
+}
+
+function accumulateMetricBucket(map, key, bucket) {
+    const row = getOrCreateMapValue(map, key, () => ({
+        key,
+        interactions: 0,
+        generations: 0,
+        acceptances: 0,
+        loc_suggested_add: 0,
+        loc_suggested_delete: 0,
+        loc_added: 0,
+        loc_deleted: 0,
+        user_loc_changed: 0,
+        agent_loc_changed: 0,
+        latest_ide_version: '',
+        latest_plugin_version: ''
+    }));
+
+    row.interactions += toNum(bucket.user_initiated_interaction_count);
+    row.generations += toNum(bucket.code_generation_activity_count);
+    row.acceptances += toNum(bucket.code_acceptance_activity_count);
+    row.loc_suggested_add += toNum(bucket.loc_suggested_to_add_sum);
+    row.loc_suggested_delete += toNum(bucket.loc_suggested_to_delete_sum);
+    row.loc_added += toNum(bucket.loc_added_sum);
+    row.loc_deleted += toNum(bucket.loc_deleted_sum);
+
+    const changedTotal = toNum(bucket.loc_added_sum) + toNum(bucket.loc_deleted_sum);
+    if (isAgentFeature(bucket.feature)) {
+        row.agent_loc_changed += changedTotal;
+    } else {
+        row.user_loc_changed += changedTotal;
+    }
+    return row;
+}
+
+function accumulateNestedMetric(map, outerKey, innerKey, value) {
+    if (!outerKey || !innerKey || !value) return;
+    const row = getOrCreateMapValue(map, outerKey, () => new Map());
+    row.set(innerKey, (row.get(innerKey) || 0) + value);
+}
+
+function accumulateCliRow(row, cliBucket) {
+    row.request_count += toNum(cliBucket.request_count);
+    row.prompt_count += toNum(cliBucket.prompt_count);
+    row.session_count += toNum(cliBucket.session_count);
+    row.prompt_tokens_sum += toNum(cliBucket.token_usage?.prompt_tokens_sum);
+    row.output_tokens_sum += toNum(cliBucket.token_usage?.output_tokens_sum);
+    row.avg_tokens_per_request = row.request_count
+        ? (row.prompt_tokens_sum + row.output_tokens_sum) / row.request_count
+        : 0;
+    updateLatestVersion(row, 'latest_cli_version', cliBucket.last_known_cli_version, info => info.cli_version || '');
+}
+
+function accumulatePullRequestRow(row, pullRequests) {
+    Object.keys(row).forEach(key => {
+        if (key === 'day') return;
+        row[key] += toNum(pullRequests[key]);
+    });
+}
+
+function updateLatestVersion(target, key, versionInfo, formatter) {
+    if (!versionInfo || typeof versionInfo !== 'object') return;
+    const sampleKey = `__${key}_sampled_at`;
+    const sampledAt = versionInfo.sampled_at || '';
+    if (!target[sampleKey] || sampledAt >= target[sampleKey]) {
+        target[sampleKey] = sampledAt;
+        target[key] = formatter(versionInfo);
+    }
+}
+
+function metricPrimaryValue(row) {
+    return row.interactions || row.generations || row.acceptances || row.user_loc_changed || row.agent_loc_changed || row.loc_added || 0;
+}
+
+function sortMetricRows(map) {
+    return Array.from(map.values()).sort((a, b) => metricPrimaryValue(b) - metricPrimaryValue(a));
+}
+
+function pickPrimaryUsageValue(bucket) {
+    return toNum(bucket.user_initiated_interaction_count) || toNum(bucket.code_generation_activity_count) || toNum(bucket.code_acceptance_activity_count);
+}
+
+function recordContainsChatActivity(record) {
+    return Array.isArray(record.totals_by_feature)
+        && record.totals_by_feature.some(featureBucket => CHAT_FEATURES.has(featureBucket.feature) && pickPrimaryUsageValue(featureBucket) > 0);
+}
+
+function recordContainsAgentActivity(record) {
+    return Array.isArray(record.totals_by_feature)
+        && record.totals_by_feature.some(featureBucket => featureBucket.feature === 'chat_panel_agent_mode' || featureBucket.feature === 'agent_edit');
+}
+
+function isAgentFeature(feature) {
+    return feature === 'agent_edit';
+}
+
+function getOrCreateMapValue(map, key, createValue) {
+    if (!map.has(key)) map.set(key, createValue());
+    return map.get(key);
+}
+
+function getWeekStart(day) {
+    const date = new Date(`${day}T00:00:00Z`);
+    const offset = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - offset);
+    return date.toISOString().slice(0, 10);
+}
+
+function sumNestedMap(map) {
+    if (!map) return 0;
+    let total = 0;
+    map.forEach(value => { total += value; });
+    return total;
 }
 
 function createChart(title, type, categories, seriesData) {
@@ -673,11 +1440,11 @@ function createChart(title, type, categories, seriesData) {
     chartsContainer.appendChild(chartContainer);
     function buildOptions(cats, data) {
         const opts = {
-            chart: { type: type === 'doughnut' ? 'pie' : (type === 'bar' ? 'column' : type), backgroundColor: 'transparent', height: 420 },
-            title: { text: title, style: { fontSize: '13px' } },
-            xAxis: { categories: cats, labels: { style: { fontSize: '11px' } } },
-            yAxis: { title: { text: null }, gridLineColor: 'rgba(255,255,255,0.07)' },
-            legend: { itemStyle: { fontSize: '11px' } },
+            chart: { type: type === 'doughnut' ? 'pie' : type, backgroundColor: 'transparent', height: 420 },
+            title: { text: title, style: { fontSize: '15px' } },
+            xAxis: { categories: cats, labels: { style: { fontSize: '12px' } } },
+            yAxis: { title: { text: null }, gridLineColor: '#dfe7f1' },
+            legend: { itemStyle: { fontSize: '12px' } },
             accessibility: { enabled: true },
             credits: { enabled: false },
             tooltip: { shared: true },
@@ -693,7 +1460,7 @@ function createChart(title, type, categories, seriesData) {
                     enabled: true,
                     // Show slice name and percentage with one decimal
                     format: '{point.name}: {point.percentage:.1f}%',
-                    style: { fontSize: '11px', fontWeight: '500', textOutline: 'none', color: '#1f2328' }
+                    style: { fontSize: '12px', fontWeight: '500', textOutline: 'none', color: '#152232' }
                 }
             }];
             delete opts.xAxis; delete opts.yAxis; opts.tooltip.shared = false;
@@ -709,17 +1476,19 @@ function createGroupedBarChart(title, categories, datasets) {
     const chartsContainer = document.getElementById('chartsContainer');
     const chartContainer = document.createElement('div');
     chartContainer.classList.add('chart-container');
+    chartContainer.setAttribute('role', 'group');
+    chartContainer.setAttribute('aria-label', title);
     const div = document.createElement('div');
     chartContainer.appendChild(div);
     chartsContainer.appendChild(chartContainer);
 
     Highcharts.chart(div, {
     chart: { type: 'column', backgroundColor: 'transparent', height: 420 },
-        title: { text: title, style: { fontSize: '13px' } },
+        title: { text: title, style: { fontSize: '15px' } },
         xAxis: { categories: categories, crosshair: true },
         yAxis: { min: 0, title: { text: null } },
         tooltip: { shared: true },
-        legend: { itemStyle: { fontSize: '11px' } },
+        legend: { itemStyle: { fontSize: '12px' } },
         accessibility: { enabled: true },
         credits: { enabled: false },
         plotOptions: { column: { pointPadding: 0.08, borderWidth: 0, groupPadding: 0.12 } },
@@ -731,15 +1500,17 @@ function createHeatmap(title, xCategories, yCategories, dataPoints, colorAxisTit
     const chartsContainer = document.getElementById('chartsContainer');
     const chartContainer = document.createElement('div');
     chartContainer.classList.add('chart-container');
+    chartContainer.setAttribute('role', 'group');
+    chartContainer.setAttribute('aria-label', title);
     const div = document.createElement('div');
     chartContainer.appendChild(div);
     chartsContainer.appendChild(chartContainer);
     const maxVal = dataPoints.reduce((m,p)=> Math.max(m,p[2]),0) || 0;
     Highcharts.chart(div, {
     chart: { type: 'heatmap', backgroundColor: 'transparent', height: 480 },
-        title: { text: title, style: { fontSize: '13px' } },
-        xAxis: { categories: xCategories, labels: { style: { fontSize: '10px' }, rotation: 40 } },
-        yAxis: { categories: yCategories, title: null, labels: { style: { fontSize: '10px' } }, reversed: true },
+        title: { text: title, style: { fontSize: '15px' } },
+        xAxis: { categories: xCategories, labels: { style: { fontSize: '12px' }, rotation: 40 } },
+        yAxis: { categories: yCategories, title: null, labels: { style: { fontSize: '12px' } }, reversed: true },
         accessibility: { enabled: true },
         legend: { align: 'right', layout: 'vertical', verticalAlign: 'middle' },
         colorAxis: {
@@ -778,14 +1549,14 @@ function createStackedChart(title, categories, series, type='column', stacking='
     chartsContainer.appendChild(chartContainer);
     Highcharts.chart(div, {
     chart: { type: type === 'area' ? 'area' : 'column', backgroundColor: 'transparent', height: (type === 'area' ? 420 : 440) },
-        title: { text: title, style: { fontSize: '13px' } },
-        xAxis: { categories, labels: { style: { fontSize: '10px' } } },
+        title: { text: title, style: { fontSize: '15px' } },
+        xAxis: { categories, labels: { style: { fontSize: '12px' } } },
         yAxis: { min: 0, title: { text: null } },
-        legend: { itemStyle: { fontSize: '11px' } },
+        legend: { itemStyle: { fontSize: '12px' } },
         tooltip: { shared: true },
         plotOptions: { 
-            series: { stacking },
-            area: { stacking, marker: { enabled: false }, lineWidth: 1 }
+            series: stacking ? { stacking } : {},
+            area: stacking ? { stacking, marker: { enabled: false }, lineWidth: 1 } : { marker: { enabled: false }, lineWidth: 1 }
         },
         accessibility: { enabled: true },
         series
@@ -826,7 +1597,6 @@ function initializeFilters(data) {
     document.querySelectorAll('.range-btn.active').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.range-btn').forEach(btn => btn.setAttribute('aria-pressed','false'));
     // Re-run with original unfiltered dataset
-    computeSummaryMetrics(window.__rawData || []);
     analyzeData(window.__rawData || []);
     };
 
@@ -839,8 +1609,6 @@ function initializeFilters(data) {
     }
 
     // Theme toggle removed (light mode default)
-
-    computeSummaryMetrics(data);
 
     enableApplyButton();
     setupQuickRangeButtons();
@@ -866,7 +1634,6 @@ function applyFilters() {
     if (membersOnly && window.__membersSet) {
         filtered = filtered.filter(r => window.__membersSet.has((r.user_login || '').toLowerCase()));
     }
-    computeSummaryMetrics(filtered);
     analyzeData(filtered);
     // Cache for user usage table & update if visible
     window.__currentFilteredData = filtered;
@@ -915,76 +1682,62 @@ function setupQuickRangeButtons() {
     });
 }
 
-function computeSummaryMetrics(data) {
+function computeSummaryMetrics(model) {
     const container = document.getElementById('summaryMetrics');
     if (!container) return;
     container.innerHTML = '';
-    if (!data.length) { container.innerHTML = buildMetricPlaceholders(); return; }
+    if (!model || !model.meta.recordCount) { container.innerHTML = buildMetricPlaceholders(); return; }
 
-    const uniqueUsers = new Set(data.map(r => r.user_id)).size;
-    const totalInteractions = sum(data, r => r.user_initiated_interaction_count);
-    const totalGenerations = sum(data, r => r.code_generation_activity_count);
-    const totalAcceptances = sum(data, r => r.code_acceptance_activity_count);
-    const acceptanceRate = totalGenerations ? ((totalAcceptances / totalGenerations) * 100).toFixed(1) : '0.0';
-    const days = new Set(data.map(r => r.day)).size;
-    const avgChatPerUser = uniqueUsers ? (totalInteractions / uniqueUsers).toFixed(1) : '0.0';
-
-    // Chat features & agent adoption
-    const chatFeatureNames = ['chat_panel_agent_mode','chat_panel_unknown_mode','chat_panel_ask_mode','chat_inline','chat_panel_custom_mode','chat_panel_edit_mode'];
-    const chatUsers = new Set();
-    const agentUsers = new Set();
-    let chatRequestsTotal = 0;
-    data.forEach(r => {
-        if (r.totals_by_feature) {
-            let userHadChat = false, userHadAgent = false;
-            r.totals_by_feature.forEach(f => {
-                if (chatFeatureNames.includes(f.feature)) {
-                    userHadChat = true;
-                    chatRequestsTotal += (f.user_initiated_interaction_count || 0);
-                    if (f.feature === 'chat_panel_agent_mode') userHadAgent = true;
-                }
-            });
-            if (userHadChat) chatUsers.add(r.user_id);
-            if (userHadAgent) agentUsers.add(r.user_id);
-        }
-    });
-    const avgChatPerChatUser = chatUsers.size ? (chatRequestsTotal / chatUsers.size).toFixed(1) : '0.0';
-    const agentAdoptionPct = uniqueUsers ? ((agentUsers.size / uniqueUsers) * 100).toFixed(1) : '0.0';
-
-    // Most used chat model
-    const modelTotals = {};
-    data.forEach(r => { if (r.totals_by_model_feature) { r.totals_by_model_feature.forEach(mf => { const m = mf.model || 'unknown'; modelTotals[m] = (modelTotals[m] || 0) + (mf.user_initiated_interaction_count || 0); }); }});
-    const mostUsedChatModel = Object.entries(modelTotals).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'n/a';
-
-    // Weekly active users (latest week)
-    const weekUserMap = {};
-    data.forEach(r => { if (!r.day) return; const d=new Date(r.day+'T00:00:00Z'); const dow=d.getUTCDay(); const diff=(dow+6)%7; const monday=new Date(d); monday.setUTCDate(d.getUTCDate()-diff); const key=monday.toISOString().substring(0,10); if(!weekUserMap[key]) weekUserMap[key]=new Set(); weekUserMap[key].add(r.user_id); });
-    const latestWeekCount = Object.keys(weekUserMap).sort().slice(-1).map(k => weekUserMap[k].size)[0] || 0;
-
-    const locAgg = computeLocAggregations(data);
+    const totalActiveUsers = model.totals.latestMonthlyActiveUsers || model.totals.uniqueUsers || model.totals.latestDailyActiveUsers;
+    const agentAdoptionPct = totalActiveUsers ? ((model.totals.latestMonthlyAgentUsers || model.totals.agentUsers) / totalActiveUsers) * 100 : 0;
     const cards = [
-        { label: 'Total Active Users', value: uniqueUsers },
-        { label: 'Total Interactions', value: totalInteractions },
-        { label: 'Code Completions', value: totalGenerations },
-        { label: 'Completions Accepted', value: totalAcceptances },
-        { label: 'Completion Acceptance Rate %', value: acceptanceRate },
-        { label: 'Avg Interactions / User', value: avgChatPerUser },
-        { label: 'Avg Chat Requests / Chat User', value: avgChatPerChatUser },
-        { label: 'Agent Adoption %', value: agentAdoptionPct },
-        { label: 'Most Used Chat Model', value: mostUsedChatModel },
-        { label: 'Weekly Active Users (Latest)', value: latestWeekCount },
-        { label: 'Distinct Days', value: days }
+        { label: 'Total Active Users', value: totalActiveUsers.toLocaleString() },
+        { label: 'Daily Active Users (Latest)', value: model.totals.latestDailyActiveUsers.toLocaleString() },
+        { label: 'Weekly Active Users (Latest)', value: model.totals.latestWeeklyActiveUsers.toLocaleString() },
+        { label: 'Interactions', value: model.totals.totalInteractions.toLocaleString() },
+        { label: 'Code Generations', value: model.totals.totalGenerations.toLocaleString() },
+        { label: 'Acceptances', value: model.totals.totalAcceptances.toLocaleString() },
+        { label: 'Acceptance Rate %', value: model.totals.acceptanceRate.toFixed(1) },
+        { label: 'Avg Chat Requests / Active User', value: model.totals.avgChatRequestsPerActiveUser.toFixed(1) },
+        { label: 'Agent Adoption %', value: agentAdoptionPct.toFixed(1) },
+        { label: 'Most Used Chat Model', value: model.totals.mostUsedChatModel },
+        { label: 'Distinct Days', value: model.meta.days.length.toLocaleString() }
     ];
-    if (locAgg && (locAgg.totalSuggestedAdd > 0 || locAgg.totalAdded > 0 || locAgg.totalDeleted > 0)) {
-        cards.splice(5, 0,
-            { label: 'LoC Suggested (Add)', value: (locAgg.totalSuggestedAdd).toLocaleString() },
-            { label: 'LoC Added (Edits)', value: (locAgg.totalAdded).toLocaleString() },
-            { label: 'LoC Deleted (Edits)', value: (locAgg.totalDeleted).toLocaleString() }
+
+    if (model.loc && (model.loc.totalSuggestedAdd > 0 || model.loc.totalAdded > 0 || model.loc.totalDeleted > 0)) {
+        cards.splice(7, 0,
+            { label: 'AI Lines Changed', value: model.totals.totalLinesChanged.toLocaleString() },
+            { label: 'Agent Contribution %', value: model.totals.agentContributionPct.toFixed(1) },
+            { label: 'Avg Agent Lines Deleted / Active User', value: model.totals.averageAgentDeletedPerActiveUser.toFixed(1) },
+            { label: 'LoC Suggested (Add)', value: model.loc.totalSuggestedAdd.toLocaleString() },
+            { label: 'LoC Added', value: model.loc.totalAdded.toLocaleString() },
+            { label: 'LoC Deleted', value: model.loc.totalDeleted.toLocaleString() }
+        );
+    }
+
+    if (model.meta.hasCli) {
+        cards.push(
+            { label: 'Daily Active CLI Users (Latest)', value: model.totals.latestDailyCliUsers.toLocaleString() },
+            { label: 'CLI Requests', value: model.totals.cli.request_count.toLocaleString() }
+        );
+    }
+
+    if (model.meta.hasCodeReview) {
+        cards.push(
+            { label: 'Code Review Active Users', value: model.totals.reviewActiveUsers.toLocaleString() },
+            { label: 'Code Review Passive Users', value: model.totals.reviewPassiveUsers.toLocaleString() }
+        );
+    }
+
+    if (model.meta.hasPullRequests) {
+        cards.push(
+            { label: 'Pull Requests Created', value: model.totals.pullRequests.total_created.toLocaleString() },
+            { label: 'Pull Requests Merged', value: model.totals.pullRequests.total_merged.toLocaleString() }
         );
     }
     const cardsHtml = cards.map(c => metricCard(c.label, c.value)).join('');
     let locNoteHtml = '';
-    if (locAgg && locAgg.boundary && (locAgg.boundary.hasBefore || locAgg.boundary.hasNulls)) {
+    if (model.loc && model.loc.boundary && (model.loc.boundary.hasBefore || model.loc.boundary.hasNulls)) {
         locNoteHtml = `<div class="small-note" style="margin-top:8px;">LoC metrics: reports before 2025-09-01 may show partial/null values. Agent edits are counted in <code>agent_edit</code> as added/deleted; suggestions come from chat panel only.</div>`;
     }
     container.innerHTML = cardsHtml + locNoteHtml;
@@ -998,20 +1751,29 @@ function sum(arr, fn) { return arr.reduce((acc, x) => acc + (fn(x) || 0), 0); }
 
 function setStatus(msg, isError=false) {
     const el = document.getElementById('statusMessage');
-    if (!el) return; el.textContent = msg; el.style.color = isError ? 'var(--danger)' : 'var(--text-dim)';
+    if (!el) return;
+    el.textContent = msg;
+    el.dataset.state = isError ? 'error' : 'info';
+    el.setAttribute('role', isError ? 'alert' : 'status');
+    el.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+    el.setAttribute('aria-atomic', 'true');
     window.__statusMessage = { text: msg, error: !!isError };
 }
 
 function showLoading(show) {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) overlay.hidden = !show;
+    ['mainContent', 'summaryMetrics', 'chartsContainer', 'tablesContainer', 'userUsageTable'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('aria-busy', show ? 'true' : 'false');
+    });
 }
 
 function enableDownloadButton() {
     const btn = document.getElementById('downloadPdfBtn');
     if (btn) btn.disabled = false;
     const uBtn = document.getElementById('userUsageBtn');
-    if (uBtn) uBtn.disabled = false;
+    if (uBtn) uBtn.disabled = !(window.__dashboardModel && window.__dashboardModel.meta.hasUserRecords);
 }
 
 function escapeHtml(str) {
@@ -1036,39 +1798,88 @@ function formatFeatureName(raw) {
     name = name.split('_').map(part => part ? (part.charAt(0).toUpperCase() + part.slice(1)) : part).join(' ');
     // Specific canonical overrides
     const overrides = {
+        'Agent Edit': 'Agent Edit',
         'Code Completion': 'Code Completion',
         'Chat Inline': 'Inline Chat',
         'Ask': 'Ask',
         'Agent': 'Agent',
         'Custom': 'Custom',
-        'Edit': 'Edit'
+        'Edit': 'Edit',
+        'Plan': 'Plan',
+        'Unknown': 'Unknown'
     };
     return overrides[name] || name;
 }
 
 // -------- Placeholder / skeleton rendering -------- //
-function buildMetricPlaceholders(count=8) {
-    return Array.from({length: count}).map(()=> '<div class="metric-card placeholder skeleton"></div>').join('');
+function buildMetricPlaceholders(mode = 'upload', count = 4) {
+    const isFilterEmpty = mode === 'filters';
+    const title = isFilterEmpty
+        ? 'No metrics match these filters'
+        : 'Load a metrics export to see the dashboard';
+    const description = isFilterEmpty
+        ? 'Clear a filter or widen the date range.'
+        : 'Cards, charts, and tables appear after upload.';
+    const checklist = isFilterEmpty
+        ? [
+            'Clear or relax the current filters.',
+            'Turn off the members-only filter if no members source is loaded.'
+        ]
+        : [
+            'Start with the Copilot metrics export.',
+            'Optionally load organization members for members-only filtering.'
+        ];
+    const guidance = `<div class="empty-state" role="note">
+        <div class="empty-state-copy">
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(description)}</p>
+            <ul class="empty-state-list">${checklist.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+        </div>
+        <div class="empty-preview" aria-hidden="true">
+            <span class="empty-chip">Local only</span>
+            <div class="empty-preview-card"></div>
+        </div>
+    </div>`;
+    const cards = Array.from({ length: count }).map(() => '<div class="metric-card placeholder skeleton" aria-hidden="true"></div>').join('');
+    return guidance + cards;
 }
 
-function renderPlaceholders() {
+function buildChartPlaceholders(mode = 'upload', count = 1) {
+    const isFilterEmpty = mode === 'filters';
+    const title = isFilterEmpty
+        ? 'No charts match these filters'
+        : 'Charts appear here after upload';
+    const description = isFilterEmpty
+        ? 'Adjust the filters and apply them again.'
+        : 'Adoption, usage, and code-generation views populate here after upload.';
+    const guidance = `<div class="empty-state" role="note">
+        <div class="empty-state-copy">
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(description)}</p>
+            <ul class="empty-state-list">
+                <li>Use quick ranges to jump to the latest 7, 14, or 28 days.</li>
+                <li>Open the reference tables for exact values.</li>
+            </ul>
+        </div>
+        <div class="empty-preview" aria-hidden="true">
+            <span class="empty-chip">Readable charts</span>
+            <div class="empty-preview-card"></div>
+        </div>
+    </div>`;
+    const charts = Array.from({ length: count }).map(() => `<div class="chart-container skeleton" aria-hidden="true">
+            <div class="placeholder-chart">
+                <div class="placeholder-bar lg skeleton"></div>
+                ${Array.from({ length: 6 }).map(() => '<div class="placeholder-bar md skeleton"></div>').join('')}
+            </div>
+        </div>`).join('');
+    return guidance + charts;
+}
+
+function renderPlaceholders(mode = 'upload') {
     const metrics = document.getElementById('summaryMetrics');
-    if (metrics && !metrics.children.length) {
-        metrics.innerHTML = buildMetricPlaceholders();
-    }
+    if (metrics) metrics.innerHTML = buildMetricPlaceholders(mode);
     const charts = document.getElementById('chartsContainer');
-    if (charts && !charts.children.length) {
-    // Reduced placeholder preview charts from 4 to 2 for less initial clutter
-    for (let i=0;i<2;i++) {
-            const c = document.createElement('div');
-            c.className = 'chart-container skeleton';
-            c.innerHTML = '<div class="placeholder-chart">'
-                + '<div class="placeholder-bar lg skeleton"></div>'
-                + Array.from({length:8}).map(()=>'<div class="placeholder-bar md skeleton"></div>').join('')
-                + '</div>';
-            charts.appendChild(c);
-        }
-    }
+    if (charts) charts.innerHTML = buildChartPlaceholders(mode);
 }
 
 // --- Enhanced PDF generation (multi-page) ---
@@ -1085,6 +1896,20 @@ function computeLocAggregations(data) {
         if (day) {
             if (day < '2025-09-01') hasBefore = true; else hasOnOrAfter = true;
         }
+        const rootLocFields = [
+            r.loc_suggested_to_add_sum,
+            r.loc_suggested_to_delete_sum,
+            r.loc_added_sum,
+            r.loc_deleted_sum
+        ];
+        const recordHasRootLocTotals = rootLocFields.some(v => v !== undefined && v !== null);
+        if (recordHasRootLocTotals) {
+            totalSuggestedAdd += toNum(r.loc_suggested_to_add_sum);
+            totalSuggestedDel += toNum(r.loc_suggested_to_delete_sum);
+            totalAdded += toNum(r.loc_added_sum);
+            totalDeleted += toNum(r.loc_deleted_sum);
+            if (rootLocFields.some(v => v === null)) hasNulls = true;
+        }
         if (Array.isArray(r.totals_by_feature)) {
             for (const f of r.totals_by_feature) {
                 const feat = f.feature || 'unknown';
@@ -1094,10 +1919,22 @@ function computeLocAggregations(data) {
                 const del = f.loc_deleted_sum;
                 if (sAdd === null || sDel === null || add === null || del === null) hasNulls = true;
                 const v = byFeature.get(feat) || { suggestAdd: 0, suggestDel: 0, added: 0, deleted: 0 };
-                if (Number.isFinite(Number(sAdd))) { v.suggestAdd += Number(sAdd); totalSuggestedAdd += Number(sAdd); }
-                if (Number.isFinite(Number(sDel))) { v.suggestDel += Number(sDel); totalSuggestedDel += Number(sDel); }
-                if (Number.isFinite(Number(add))) { v.added += Number(add); totalAdded += Number(add); }
-                if (Number.isFinite(Number(del))) { v.deleted += Number(del); totalDeleted += Number(del); }
+                if (Number.isFinite(Number(sAdd))) {
+                    v.suggestAdd += Number(sAdd);
+                    if (!recordHasRootLocTotals) totalSuggestedAdd += Number(sAdd);
+                }
+                if (Number.isFinite(Number(sDel))) {
+                    v.suggestDel += Number(sDel);
+                    if (!recordHasRootLocTotals) totalSuggestedDel += Number(sDel);
+                }
+                if (Number.isFinite(Number(add))) {
+                    v.added += Number(add);
+                    if (!recordHasRootLocTotals) totalAdded += Number(add);
+                }
+                if (Number.isFinite(Number(del))) {
+                    v.deleted += Number(del);
+                    if (!recordHasRootLocTotals) totalDeleted += Number(del);
+                }
                 byFeature.set(feat, v);
             }
         }
@@ -1119,7 +1956,7 @@ function computeLocAggregations(data) {
 async function generatePdfReport() {
     const { jsPDF } = window.jspdf || {};
     if (!jsPDF || !window.html2canvas) {
-        alert('PDF libraries not loaded.');
+        setStatus('PDF export is unavailable because the PDF libraries did not load.', true);
         return;
     }
     const downloadBtn = document.getElementById('downloadPdfBtn');
@@ -1269,8 +2106,7 @@ async function generatePdfReport() {
         setStatus('PDF ready.');
     } catch (err) {
         console.error('PDF generation error', err);
-        setStatus('PDF generation failed', true);
-        alert('PDF generation failed: ' + err.message);
+        setStatus(`PDF generation failed: ${err.message}`, true);
     } finally {
         if (downloadBtn) downloadBtn.disabled = false;
     }
@@ -1286,17 +2122,20 @@ function toggleUserUsage(show) {
     section.hidden = !show;
     chartsSec.hidden = show;
     if (show) {
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        section.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
         document.getElementById('exportUsersCsvBtn')?.removeAttribute('disabled');
+        section.focus({ preventScroll: true });
     } else {
-        chartsSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        chartsSec.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
+        chartsSec.focus({ preventScroll: true });
     }
 }
 
 function aggregateUserUsage(data) {
     const map = new Map();
     data.forEach(r => {
-        const login = r.user_login || '(unknown)';
+        const login = r.user_login || (r.user_id ? `user-${r.user_id}` : '');
+        if (!login) return;
         if (!map.has(login)) {
             map.set(login, {
                 user_login: login,
@@ -1306,10 +2145,20 @@ function aggregateUserUsage(data) {
                 acceptances: 0,
                 acceptance_rate: 0,
                 days_active: new Set(),
+                chat_days: new Set(),
+                agent_days: new Set(),
+                cli_days: new Set(),
+                review_active_days: new Set(),
+                review_passive_days: new Set(),
                 models: {},
                 languages: {},
                 features: {},
+                ides: {},
+                chat_modes: {},
+                cli_requests: 0,
+                cli_sessions: 0,
                 loc_suggested_add: 0,
+                loc_suggested_delete: 0,
                 loc_added: 0,
                 loc_deleted: 0
             });
@@ -1319,36 +2168,62 @@ function aggregateUserUsage(data) {
         row.completions += (r.code_generation_activity_count || 0);
         row.acceptances += (r.code_acceptance_activity_count || 0);
         if (r.day) row.days_active.add(r.day);
+        if (r.day && (r.used_chat || recordContainsChatActivity(r))) row.chat_days.add(r.day);
+        if (r.day && (r.used_agent || recordContainsAgentActivity(r))) row.agent_days.add(r.day);
+        if (r.day && (r.used_cli || r.totals_by_cli)) row.cli_days.add(r.day);
+        if (r.day && r.used_copilot_code_review_active) row.review_active_days.add(r.day);
+        if (r.day && r.used_copilot_code_review_passive) row.review_passive_days.add(r.day);
         if (r.totals_by_model_feature) {
             r.totals_by_model_feature.forEach(mf => {
                 const m = mf.model || 'unknown';
-                row.models[m] = (row.models[m] || 0) + (mf.user_initiated_interaction_count || 0);
+                row.models[m] = (row.models[m] || 0) + pickPrimaryUsageValue(mf);
             });
         }
         if (r.totals_by_language_feature) {
             r.totals_by_language_feature.forEach(lf => {
                 const lang = lf.language || 'unknown';
-                const val = (lf.user_initiated_interaction_count || lf.code_generation_activity_count || 0);
+                const val = pickPrimaryUsageValue(lf);
                 row.languages[lang] = (row.languages[lang] || 0) + val;
+            });
+        }
+        if (r.totals_by_ide) {
+            r.totals_by_ide.forEach(ideBucket => {
+                const ide = ideBucket.ide || 'unknown';
+                row.ides[ide] = (row.ides[ide] || 0) + pickPrimaryUsageValue(ideBucket);
             });
         }
         if (r.totals_by_feature) {
             r.totals_by_feature.forEach(f => {
                 const feat = f.feature || 'unknown';
-                row.features[feat] = (row.features[feat] || 0) + (f.user_initiated_interaction_count || 0);
+                row.features[feat] = (row.features[feat] || 0) + pickPrimaryUsageValue(f);
+                if (CHAT_MODE_FEATURES.includes(feat)) {
+                    row.chat_modes[feat] = (row.chat_modes[feat] || 0) + (f.user_initiated_interaction_count || 0);
+                }
                 // LoC per-user: sum from feature bucket to avoid double-counting
                 row.loc_suggested_add += toNum(f.loc_suggested_to_add_sum);
+                row.loc_suggested_delete += toNum(f.loc_suggested_to_delete_sum);
                 row.loc_added += toNum(f.loc_added_sum);
                 row.loc_deleted += toNum(f.loc_deleted_sum);
             });
+        }
+        if (r.totals_by_cli) {
+            row.cli_requests += toNum(r.totals_by_cli.request_count);
+            row.cli_sessions += toNum(r.totals_by_cli.session_count);
         }
     });
     const rows = Array.from(map.values()).map(r => {
         r.acceptance_rate = r.completions ? (r.acceptances / r.completions * 100) : 0;
         r.days_active_count = r.days_active.size;
+        r.chat_days_count = r.chat_days.size;
+        r.agent_days_count = r.agent_days.size;
+        r.cli_days_count = r.cli_days.size;
+        r.review_active_days_count = r.review_active_days.size;
+        r.review_passive_days_count = r.review_passive_days.size;
         r.top_model = topKey(r.models);
         r.top_language = topKey(r.languages);
         r.top_feature = formatFeatureName(topKey(r.features));
+        r.top_ide = topKey(r.ides);
+        r.top_chat_mode = formatFeatureName(topKey(r.chat_modes));
         return r;
     });
     return rows;
@@ -1368,8 +2243,15 @@ function buildUserUsageTable(data) {
     const tbody = table.querySelector('tbody');
     const rows = aggregateUserUsage(data);
     window.__userUsageRows = rows;
+    const exportBtn = document.getElementById('exportUsersCsvBtn');
     // Build head
     thead.innerHTML = '';
+    if (!rows.length) {
+        if (exportBtn) exportBtn.disabled = true;
+        tbody.innerHTML = '<tr><td colspan="22">No user-level records are available for the current filters.</td></tr>';
+        return;
+    }
+    if (exportBtn) exportBtn.disabled = false;
     const headers = [
         { key: 'user_login', label: 'User' },
         { key: 'interactions', label: 'Interactions' },
@@ -1377,22 +2259,37 @@ function buildUserUsageTable(data) {
         { key: 'acceptances', label: 'Acceptances' },
         { key: 'acceptance_rate', label: 'Acceptance %' },
         { key: 'days_active_count', label: 'Days Active' },
+        { key: 'chat_days_count', label: 'Chat Days' },
+        { key: 'agent_days_count', label: 'Agent Days' },
+        { key: 'cli_days_count', label: 'CLI Days' },
+        { key: 'review_active_days_count', label: 'Review Active Days' },
+        { key: 'review_passive_days_count', label: 'Review Passive Days' },
+        { key: 'cli_requests', label: 'CLI Requests' },
+        { key: 'cli_sessions', label: 'CLI Sessions' },
         { key: 'loc_suggested_add', label: 'LoC Suggested' },
+        { key: 'loc_suggested_delete', label: 'LoC Suggested Del' },
         { key: 'loc_added', label: 'LoC Added' },
         { key: 'loc_deleted', label: 'LoC Deleted' },
         { key: 'top_model', label: 'Top Model' },
         { key: 'top_language', label: 'Top Language' },
-        { key: 'top_feature', label: 'Top Feature' }
+        { key: 'top_feature', label: 'Top Feature' },
+        { key: 'top_ide', label: 'Top IDE' },
+        { key: 'top_chat_mode', label: 'Top Chat Mode' }
     ];
     const tr = document.createElement('tr');
     headers.forEach(h => {
         const th = document.createElement('th');
-        th.textContent = h.label;
         th.dataset.key = h.key;
+        th.dataset.label = h.label;
         th.scope = 'col';
         th.classList.add('sortable');
-        if (h.key === userUsageSort.key) th.classList.add(userUsageSort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
-        th.addEventListener('click', () => {
+        th.setAttribute('aria-sort', h.key === userUsageSort.key ? (userUsageSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+        const sortBtn = document.createElement('button');
+        sortBtn.type = 'button';
+        sortBtn.className = 'sort-button';
+        sortBtn.textContent = h.label;
+        sortBtn.setAttribute('aria-label', `Sort by ${h.label}`);
+        sortBtn.addEventListener('click', () => {
             if (userUsageSort.key === h.key) {
                 userUsageSort.dir = userUsageSort.dir === 'asc' ? 'desc' : 'asc';
             } else {
@@ -1400,6 +2297,7 @@ function buildUserUsageTable(data) {
             }
             renderUserUsageRows();
         });
+        th.appendChild(sortBtn);
         tr.appendChild(th);
     });
     thead.appendChild(tr);
@@ -1413,27 +2311,76 @@ function buildUserUsageTable(data) {
             return String(va).localeCompare(String(vb), undefined, { sensitivity: 'base' }) * dir;
         });
         tbody.innerHTML = rows.map(r => `<tr>
-            <td>${escapeHtml(r.user_login)}</td>
+            <th scope="row">${escapeHtml(r.user_login)}</th>
             <td>${r.interactions}</td>
             <td>${r.completions}</td>
             <td>${r.acceptances}</td>
             <td>${r.acceptance_rate.toFixed(1)}</td>
             <td>${r.days_active_count}</td>
+            <td>${r.chat_days_count}</td>
+            <td>${r.agent_days_count}</td>
+            <td>${r.cli_days_count}</td>
+            <td>${r.review_active_days_count}</td>
+            <td>${r.review_passive_days_count}</td>
+            <td>${r.cli_requests}</td>
+            <td>${r.cli_sessions}</td>
             <td>${r.loc_suggested_add}</td>
+            <td>${r.loc_suggested_delete}</td>
             <td>${r.loc_added}</td>
             <td>${r.loc_deleted}</td>
             <td>${escapeHtml(r.top_model)}</td>
             <td>${escapeHtml(r.top_language)}</td>
             <td>${escapeHtml(r.top_feature)}</td>
+            <td>${escapeHtml(r.top_ide)}</td>
+            <td>${escapeHtml(r.top_chat_mode)}</td>
         </tr>`).join('');
-        table.querySelectorAll('th').forEach(th => { th.classList.remove('sort-asc','sort-desc'); if (th.dataset.key === key) th.classList.add(dir === 1 ? 'sort-asc' : 'sort-desc'); });
+        thead.querySelectorAll('th.sortable').forEach(th => {
+            const isActive = th.dataset.key === key;
+            const label = th.dataset.label || th.dataset.key;
+            th.setAttribute('aria-sort', isActive ? (dir === 1 ? 'ascending' : 'descending') : 'none');
+            th.classList.toggle('sort-asc', isActive && dir === 1);
+            th.classList.toggle('sort-desc', isActive && dir !== 1);
+            const button = th.querySelector('.sort-button');
+            if (button) {
+                button.setAttribute(
+                    'aria-label',
+                    isActive
+                        ? `${label}, sorted ${dir === 1 ? 'ascending' : 'descending'}. Activate to sort ${dir === 1 ? 'descending' : 'ascending'}.`
+                        : `Sort by ${label}`
+                );
+            }
+        });
     }
 }
 
 function exportUserUsageCsv() {
     const rows = window.__userUsageRows || aggregateUserUsage(window.__currentFilteredData || window.__rawData || []);
-    if (!rows.length) { alert('No rows to export'); return; }
-    const header = ['user_login','user_id','interactions','completions','acceptances','acceptance_rate','days_active','loc_suggested_add','loc_added','loc_deleted','top_model','top_language','top_feature'];
+    if (!rows.length) { setStatus('No per-user rows are available to export for the current filters.', true); return; }
+    const header = [
+        'user_login',
+        'user_id',
+        'interactions',
+        'completions',
+        'acceptances',
+        'acceptance_rate',
+        'days_active',
+        'chat_days',
+        'agent_days',
+        'cli_days',
+        'review_active_days',
+        'review_passive_days',
+        'cli_requests',
+        'cli_sessions',
+        'loc_suggested_add',
+        'loc_suggested_delete',
+        'loc_added',
+        'loc_deleted',
+        'top_model',
+        'top_language',
+        'top_feature',
+        'top_ide',
+        'top_chat_mode'
+    ];
     const lines = [header.join(',')];
     rows.forEach(r => {
         const vals = [
@@ -1444,12 +2391,22 @@ function exportUserUsageCsv() {
             r.acceptances,
             r.acceptance_rate.toFixed(2),
             r.days_active_count,
+            r.chat_days_count,
+            r.agent_days_count,
+            r.cli_days_count,
+            r.review_active_days_count,
+            r.review_passive_days_count,
+            r.cli_requests,
+            r.cli_sessions,
             r.loc_suggested_add,
+            r.loc_suggested_delete,
             r.loc_added,
             r.loc_deleted,
             r.top_model,
             r.top_language,
-            r.top_feature
+            r.top_feature,
+            r.top_ide,
+            r.top_chat_mode
         ].map(v => csvEscape(v));
         lines.push(vals.join(','));
     });
