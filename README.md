@@ -2,9 +2,11 @@
 
 **Please note this is not an official solution from GitHub.**
 
-This is a local, client‑side dashboard for exploring GitHub Copilot Enterprise usage exports. It supports both **local file uploads** and **direct GitHub API integration**. No data is uploaded to a server: everything stays in your browser.
+This is a local, client‑side dashboard for exploring GitHub Copilot usage exports. It supports both **local file uploads** and **direct GitHub API integration** for organization members filtering. No data is uploaded to a server: everything stays in your browser.
 
-See `metrics-updates.md` for details on the new Lines of Code (LoC) metrics and agent mode handling introduced in the private preview.
+The dashboard now handles both:
+* **User-level records** (for per-user analysis, user flags, and CSV export)
+* **Aggregate day totals** from enterprise/org reports (including `day_totals`, CLI metrics, pull request activity, and monthly/daily active user fields)
 
 ### Quick Start Options
 
@@ -54,6 +56,7 @@ Check the API members toggle, enter PAT + Organization name, click "Fetch Member
 Export your Copilot metrics (enterprise or organization scope) from GitHub.
 This can be exported by clicking on download button here. https://github.com/enterprises/{enterprise_slug}/insights/copilot
 
+Supported shapes include JSON arrays, JSON Lines / NDJSON, object wrappers, and enterprise/org responses that contain `day_totals`.
 
 Optional (file mode only): export a list of organization members (array or JSON Lines) containing a `login` field to enable the “Members only” filter.
 
@@ -97,36 +100,45 @@ Screenshots:
 * Reset: clears search, date edits, quick‑range selection, and members‑only filter, restoring the full dataset.
 
 ### 5. Explore the metrics
-Summary cards show totals (active users, interactions, completions, acceptances, acceptance rate, distinct days, weekly active users, chat adoption metrics, and most used chat model). Below them, interactive charts visualize:
-* Top users by interaction, completions vs acceptances, acceptance rate %
-* Language usage (totals, per day stacked area)
-* Model usage (overall, per day, per feature)
-* Feature usage, IDE distribution
-* Lines of Code (LoC): Suggested (chat) vs Edits (added/deleted) by feature, and Edits by language
-* LoC Suggested (Delete) by feature
-* LoC: Agent vs Non‑Agent (Edits)
-* Heatmaps (Language × Model, Feature × Model)
-* Daily and weekly active users
+Summary cards now reflect the latest Copilot usage metrics reference, including active-user rollups, chat usage, LoC changed with AI, agent contribution, CLI usage, code review activity, and pull request totals when present in the export.
 
-#### NEW: Per-User Usage Table & CSV Export
-Click the "User Usage Table" button (enabled after loading data) to view a sortable table of aggregated metrics per user:
+Below them, the dashboard renders updated chart groups for:
+* Adoption, usage, and chat modes
+* Model usage (overall, per day, per chat mode, per language)
+* Language usage (overall and per day)
+* IDE distribution
+* Daily / weekly active users and daily active CLI users
+* Code generation views: LoC suggested vs changed, daily added/deleted lines, and user-initiated vs agent-initiated changes
+* Pull request and Copilot review suggestion activity
+
+#### Reference tables
+The **Reference tables** section mirrors the newer schema with sortable-by-filter tables for:
+* Daily overview values
+* Feature, language, model, and IDE breakdowns
+* CLI activity
+* Code review activity
+* Pull request lifecycle activity
+
+#### Per-user detail & CSV export
+Click the **User Usage Table** button (enabled when user-level records are present) to view a sortable table of aggregated metrics per user. It now includes:
 * Interactions, completions, acceptances, acceptance %
-* Distinct active days
-* LoC Suggested (add), LoC Added, LoC Deleted
-* Top model, language, and feature (based on interaction counts)
+* Active days, chat days, agent days, CLI days, and code review days
+* CLI requests / sessions
+* LoC Suggested (add/delete), LoC Added, LoC Deleted
+* Top model, language, feature, IDE, and chat mode
 
 You can:
 * Click column headers to sort ascending/descending.
-* Export the current (filtered) per-user aggregations to CSV via the "Export CSV" button inside the table view.
+* Export the current filtered per-user aggregations to CSV via the **Export CSV** button inside the table view.
 * Use existing filters (date range, user search, members only) then open or refresh the table; it always reflects current filters.
-* Click "Back to Dashboard" to return to the charts.
+* Click **Back to Dashboard** to return to the charts and reference tables.
 
 Hover any chart element for tooltips. Categories auto‑trim if extremely long to preserve readability.
 
 ### 6. Generate a PDF report
 1. (Optional) Enter Enterprise Name and/or Organization Name (for labeling only; not used for API fetch now).
 2. Click “Download PDF” after data loads. A multi‑page PDF (summary grid + each chart) is generated entirely in your browser.
-3. (Optional) If you need raw per-user detail, use the CSV export from the User Usage Table (not included in the PDF) for further spreadsheet analysis.
+3. Reference tables and the per-user CSV export are kept in the web view; they are not embedded in the PDF.
 
 ### 7. Privacy & local‑only behavior
 * Files are read with the File API; contents are not sent elsewhere.
@@ -137,10 +149,10 @@ Hover any chart element for tooltips. Categories auto‑trim if extremely long t
 | Symptom | What to try |
 |---------|-------------|
 | “Upload parse error” | Ensure valid JSON / JSON Lines; remove comment lines; check for trailing commas. |
-| No charts after upload | File may be empty or fields missing required numeric metrics. Verify export source. |
+| No charts after upload | File may be empty, use an unsupported wrapper, or omit the expected Copilot usage fields. Verify the export matches the GitHub Copilot usage metrics schema. |
 | LoC values are null | Before 2025-09-01 exports may include legacy fields where new LoC metrics are null. Update IDEs and use newer dates for full LoC coverage. |
 | Members only disabled | Upload a members file with objects containing a login field. |
-| Date inputs empty or disabled | Ensure records contain a `day` field (YYYY-MM-DD). |
+| Date inputs empty or disabled | Ensure records or `day_totals` entries contain a `day` field (YYYY-MM-DD). |
 | PDF button disabled | Load a metrics file first; button enables after successful parsing. |
 
 ### 9. Suggested workflow
@@ -148,9 +160,10 @@ Hover any chart element for tooltips. Categories auto‑trim if extremely long t
 2. (Optional) Download members list from GitHub Organisation Members page.
 3. Open dashboard locally and load metrics file.
 4. Apply date + user filters to focus on adoption windows (e.g., last 28 days).
-5. Review acceptance, agent adoption %, weekly active users.
-6. Review LoC metrics: Suggested (from chat panel code blocks) vs Added/Deleted (from agent_edit and edit mode), Suggested (Delete) by feature, and an Agent vs Non‑Agent view of edits. Note that agent edits are excluded from suggestions by design.
-6. Export PDF for sharing with stakeholders.
+5. Review acceptance, agent adoption %, active-user rollups, and most used chat model.
+6. Review LoC metrics: suggested vs changed, user-initiated vs agent-initiated edits, and language/model breakdowns.
+7. If present in the export, review CLI activity, code review activity, and pull request metrics.
+8. Export PDF for charts or CSV for per-user detail.
 
 ### 10. FAQ
 * Does it send data over the network? \
@@ -187,4 +200,3 @@ For feature ideas or adjustments, edit `script.js` or `style.css` — no build s
 * PAT never stored; used only for the single members request.
 * Metrics JSON stays fully local (uploaded file only).
 * No external metrics endpoints are called.
-
