@@ -1,6 +1,10 @@
-// Apply theme only; user must upload a file now (no default data.json)
+// Initialize theme and placeholders; user must upload a file now (no default data.json)
+const THEME_STORAGE_KEY = 'copilotMetricsTheme';
+
 window.addEventListener('load', () => {
+    syncThemeDocumentState(getPreferredTheme());
     setupHighchartsTheme();
+    updateThemeToggleState(getCurrentTheme());
     setStatus('Ready for a metrics export. Upload a JSON or JSON Lines file to populate the dashboard.');
     renderPlaceholders();
     warnIfFileOrigin();
@@ -44,39 +48,150 @@ function preferredScrollBehavior() {
     return prefersReducedMotion() ? 'auto' : 'smooth';
 }
 
+function waitForPaint(frames = 1) {
+    const runFrame = () => new Promise(resolve => {
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(() => resolve());
+            return;
+        }
+        setTimeout(resolve, 16);
+    });
+    return Array.from({ length: Math.max(1, frames) }).reduce(
+        promise => promise.then(runFrame),
+        Promise.resolve()
+    );
+}
+
+function getStoredTheme() {
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    return storedTheme === 'dark' || storedTheme === 'light' ? storedTheme : null;
+}
+
+function getSystemTheme() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function getPreferredTheme() {
+    return getStoredTheme() || getSystemTheme();
+}
+
+function getCurrentTheme() {
+    return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+}
+
+function syncThemeDocumentState(theme) {
+    const resolvedTheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = resolvedTheme;
+    if (document.body) {
+        document.body.classList.remove('light', 'dark');
+        document.body.classList.add(resolvedTheme);
+    }
+    return resolvedTheme;
+}
+
+function getThemeTokens() {
+    const styles = getComputedStyle(document.documentElement);
+    const read = name => styles.getPropertyValue(name).trim();
+    return {
+        text: read('--text'),
+        textDim: read('--text-dim'),
+        accent: read('--accent'),
+        accentStrong: read('--accent-strong'),
+        panel: read('--panel'),
+        panelBorder: read('--panel-border'),
+        chartGrid: read('--chart-grid'),
+        exportSurface: read('--export-surface'),
+        heatStops: [
+            read('--heatmap-1'),
+            read('--heatmap-2'),
+            read('--heatmap-3'),
+            read('--heatmap-4')
+        ],
+        heatBorder: read('--heatmap-border'),
+        chartColors: Array.from({ length: 10 }, (_, index) => read(`--chart-${index + 1}`)).filter(Boolean)
+    };
+}
+
+function updateThemeToggleState(theme = getCurrentTheme()) {
+    const toggle = document.getElementById('themeToggle');
+    if (!toggle) return;
+    const isDark = theme === 'dark';
+    toggle.setAttribute('aria-checked', isDark ? 'true' : 'false');
+    toggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+}
+
+function refreshThemeCharts() {
+    setupHighchartsTheme();
+    const activeData = Array.isArray(window.__currentFilteredData) ? window.__currentFilteredData : [];
+    if (activeData.length && window.__dashboardModel) {
+        renderCharts(window.__dashboardModel);
+    }
+}
+
+function applyTheme(theme, { persist = true, refreshCharts = true } = {}) {
+    const resolvedTheme = syncThemeDocumentState(theme);
+    if (persist) {
+        localStorage.setItem(THEME_STORAGE_KEY, resolvedTheme);
+    }
+    updateThemeToggleState(resolvedTheme);
+    if (refreshCharts) refreshThemeCharts();
+    return resolvedTheme;
+}
+
+function initializeThemeToggle() {
+    const toggle = document.getElementById('themeToggle');
+    const resolvedTheme = syncThemeDocumentState(getPreferredTheme());
+    updateThemeToggleState(resolvedTheme);
+    if (!toggle) return;
+
+    toggle.addEventListener('click', () => {
+        const nextTheme = getCurrentTheme() === 'dark' ? 'light' : 'dark';
+        applyTheme(nextTheme);
+    });
+
+    const systemThemeQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    if (systemThemeQuery && typeof systemThemeQuery.addEventListener === 'function') {
+        systemThemeQuery.addEventListener('change', event => {
+            if (getStoredTheme()) return;
+            applyTheme(event.matches ? 'dark' : 'light', { persist: false });
+        });
+    }
+}
+
 function setupHighchartsTheme() {
     if (typeof Highcharts === 'undefined') return;
+    const tokens = getThemeTokens();
     Highcharts.setOptions({
         chart: {
             backgroundColor: 'transparent',
             style: { fontFamily: 'ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }
         },
-        colors: ['#0b5bd3', '#0f766e', '#7c3aed', '#b45309', '#2563eb', '#be185d', '#1d4ed8', '#15803d', '#9333ea', '#c2410c'],
-        title: { style: { color: '#152232', fontWeight: '700', fontSize: '15px' } },
-        subtitle: { style: { color: '#4d6177', fontSize: '12px' } },
+        colors: tokens.chartColors.length ? tokens.chartColors : ['#0b5bd3', '#0f766e', '#7c3aed', '#b45309', '#2563eb', '#be185d', '#1d4ed8', '#15803d', '#9333ea', '#c2410c'],
+        title: { style: { color: tokens.text, fontWeight: '700', fontSize: '15px' } },
+        subtitle: { style: { color: tokens.textDim, fontSize: '12px' } },
         xAxis: {
-            lineColor: '#c9d4e2',
-            tickColor: '#c9d4e2',
-            gridLineColor: '#dfe7f1',
-            labels: { style: { color: '#4d6177', fontSize: '12px' } },
-            title: { style: { color: '#4d6177', fontSize: '12px' } }
+            lineColor: tokens.panelBorder,
+            tickColor: tokens.panelBorder,
+            gridLineColor: tokens.chartGrid,
+            labels: { style: { color: tokens.textDim, fontSize: '12px' } },
+            title: { style: { color: tokens.textDim, fontSize: '12px' } }
         },
         yAxis: {
-            lineColor: '#c9d4e2',
-            tickColor: '#c9d4e2',
-            gridLineColor: '#dfe7f1',
-            labels: { style: { color: '#4d6177', fontSize: '12px' } },
-            title: { style: { color: '#4d6177', fontSize: '12px' } }
+            lineColor: tokens.panelBorder,
+            tickColor: tokens.panelBorder,
+            gridLineColor: tokens.chartGrid,
+            labels: { style: { color: tokens.textDim, fontSize: '12px' } },
+            title: { style: { color: tokens.textDim, fontSize: '12px' } }
         },
         legend: {
             backgroundColor: 'transparent',
-            itemStyle: { color: '#152232', fontSize: '12px' },
-            itemHoverStyle: { color: '#0b5bd3' }
+            itemStyle: { color: tokens.text, fontSize: '12px' },
+            itemHoverStyle: { color: tokens.accentStrong, fontSize: '12px' }
         },
         tooltip: {
-            backgroundColor: '#fcfdff',
-            borderColor: '#c9d4e2',
-            style: { color: '#152232', fontSize: '12px' },
+            backgroundColor: tokens.panel,
+            borderColor: tokens.panelBorder,
+            style: { color: tokens.text, fontSize: '12px' },
             valueDecimals: 0,
             // Show the specific section (category / slice / point) name instead of the chart title
             formatter: function() {
@@ -94,7 +209,7 @@ function setupHighchartsTheme() {
         plotOptions: {
             column: { borderRadius: 2, borderWidth: 0 },
             bar: { borderRadius: 2, borderWidth: 0 },
-            pie: { dataLabels: { style: { fontSize: '12px', color: '#152232' } } }
+            pie: { dataLabels: { style: { fontSize: '12px', color: tokens.text } } }
         },
         credits: { enabled: false }
     });
@@ -107,6 +222,8 @@ document.addEventListener('DOMContentLoaded', () => {
     analyzeBtnEl = document.getElementById('analyzeBtn');
     fetchApiBtnEl = document.getElementById('fetchApiBtn');
     const fileTriggerEl = document.getElementById('jsonFileTrigger');
+
+    initializeThemeToggle();
     
     // API members toggle handling
     const apiToggle = document.getElementById('apiMembersToggle');
@@ -1439,11 +1556,12 @@ function createChart(title, type, categories, seriesData) {
     chartContainer.appendChild(div);
     chartsContainer.appendChild(chartContainer);
     function buildOptions(cats, data) {
+        const tokens = getThemeTokens();
         const opts = {
             chart: { type: type === 'doughnut' ? 'pie' : type, backgroundColor: 'transparent', height: 420 },
             title: { text: title, style: { fontSize: '15px' } },
             xAxis: { categories: cats, labels: { style: { fontSize: '12px' } } },
-            yAxis: { title: { text: null }, gridLineColor: '#dfe7f1' },
+            yAxis: { title: { text: null }, gridLineColor: tokens.chartGrid },
             legend: { itemStyle: { fontSize: '12px' } },
             accessibility: { enabled: true },
             credits: { enabled: false },
@@ -1460,7 +1578,7 @@ function createChart(title, type, categories, seriesData) {
                     enabled: true,
                     // Show slice name and percentage with one decimal
                     format: '{point.name}: {point.percentage:.1f}%',
-                    style: { fontSize: '12px', fontWeight: '500', textOutline: 'none', color: '#152232' }
+                    style: { fontSize: '12px', fontWeight: '500', textOutline: 'none', color: tokens.text }
                 }
             }];
             delete opts.xAxis; delete opts.yAxis; opts.tooltip.shared = false;
@@ -1506,6 +1624,7 @@ function createHeatmap(title, xCategories, yCategories, dataPoints, colorAxisTit
     chartContainer.appendChild(div);
     chartsContainer.appendChild(chartContainer);
     const maxVal = dataPoints.reduce((m,p)=> Math.max(m,p[2]),0) || 0;
+    const tokens = getThemeTokens();
     Highcharts.chart(div, {
     chart: { type: 'heatmap', backgroundColor: 'transparent', height: 480 },
         title: { text: title, style: { fontSize: '15px' } },
@@ -1517,10 +1636,10 @@ function createHeatmap(title, xCategories, yCategories, dataPoints, colorAxisTit
             min: 0,
             max: maxVal,
             stops: [
-                [0, '#f0f6ff'],
-                [0.4, '#93c5fd'],
-                [0.7, '#3b82f6'],
-                [1, '#1d4ed8']
+                [0, tokens.heatStops[0]],
+                [0.4, tokens.heatStops[1]],
+                [0.7, tokens.heatStops[2]],
+                [1, tokens.heatStops[3]]
             ]
         },
         tooltip: { 
@@ -1529,7 +1648,7 @@ function createHeatmap(title, xCategories, yCategories, dataPoints, colorAxisTit
         series: [{
             name: colorAxisTitle,
             borderWidth: 1,
-            borderColor: '#ffffff',
+            borderColor: tokens.heatBorder,
             colsize: 1,
             rowsize: 1,
             data: dataPoints,
@@ -1607,8 +1726,6 @@ function initializeFilters(data) {
             applyFilters();
         });
     }
-
-    // Theme toggle removed (light mode default)
 
     enableApplyButton();
     setupQuickRangeButtons();
@@ -1960,9 +2077,19 @@ async function generatePdfReport() {
         return;
     }
     const downloadBtn = document.getElementById('downloadPdfBtn');
+    const originalTheme = getCurrentTheme();
+    const shouldRestoreTheme = originalTheme !== 'light';
+    const loadingTextEl = document.querySelector('#loadingOverlay .loading-text');
+    const previousLoadingText = loadingTextEl ? loadingTextEl.textContent : '';
     if (downloadBtn) downloadBtn.disabled = true;
+    if (loadingTextEl) loadingTextEl.textContent = 'Building PDF…';
+    showLoading(true);
     setStatus('Building PDF report…');
     try {
+        if (shouldRestoreTheme) {
+            applyTheme('light', { persist: false });
+            await waitForPaint(2);
+        }
         const doc = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
@@ -2067,7 +2194,8 @@ async function generatePdfReport() {
             }
             if (!dataUrl) {
                 // Fallback: rasterize container
-        const canvas = await html2canvas(chartEl, { backgroundColor: '#ffffff', scale: chartImageScale, useCORS: true });
+                const exportSource = hcChart?.renderTo || chartEl.firstElementChild || chartEl;
+        const canvas = await html2canvas(exportSource, { backgroundColor: '#ffffff', scale: chartImageScale, useCORS: true });
                 dataUrl = canvas.toDataURL('image/png');
             }
             // Scale image to fit width
@@ -2108,6 +2236,12 @@ async function generatePdfReport() {
         console.error('PDF generation error', err);
         setStatus(`PDF generation failed: ${err.message}`, true);
     } finally {
+        if (shouldRestoreTheme) {
+            applyTheme(originalTheme, { persist: false });
+            await waitForPaint(2);
+        }
+        if (loadingTextEl) loadingTextEl.textContent = previousLoadingText || 'Analyzing…';
+        showLoading(false);
         if (downloadBtn) downloadBtn.disabled = false;
     }
 }

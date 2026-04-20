@@ -3,11 +3,19 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+        const storedTheme = localStorage.getItem('copilotMetricsTheme');
+        const resolvedTheme = storedTheme === 'dark' || storedTheme === 'light'
+            ? storedTheme
+            : ((window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light');
+        document.documentElement.dataset.theme = resolvedTheme;
+    </script>
     <title>GitHub Copilot Metrics Analyzer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f5f8fd'/%3E%3Cpath d='M8 22h4V14H8zm6 0h4V10h-4zm6 0h4V17h-4z' fill='%230b5bd3'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="style.css" />
 </head>
-<body class="light">
+<body>
     <a class="skip-link" href="#mainContent">Skip to dashboard content</a>
     <header class="app-header">
         <div class="logo-title">
@@ -19,6 +27,14 @@
         </div>
         <nav class="top-nav" aria-label="Primary">
             <ul class="nav-list">
+                <li>
+                    <button type="button" id="themeToggle" class="theme-toggle" role="switch" aria-checked="false">
+                        <span class="theme-toggle-track" aria-hidden="true">
+                            <span class="theme-toggle-thumb"></span>
+                        </span>
+                        <span class="theme-toggle-label">Dark mode</span>
+                    </button>
+                </li>
                 <li><a href="https://github.com/abhi-singhs/copilot-metrics-analysis/blob/main/README.md" target="_blank" rel="noopener noreferrer" aria-label="Open usage guide README in new tab">Usage guide</a></li>
             </ul>
         </nav>
