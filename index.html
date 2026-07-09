@@ -13,7 +13,7 @@
     </script>
     <title>GitHub Copilot Metrics Analyzer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f5f8fd'/%3E%3Cpath d='M8 22h4V14H8zm6 0h4V10h-4zm6 0h4V17h-4z' fill='%230b5bd3'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=20260709-4" />
 </head>
 <body>
     <a class="skip-link" href="#mainContent">Skip to dashboard content</a>
@@ -40,7 +40,18 @@
         </nav>
     </header>
     <main id="mainContent" tabindex="-1">
-        <section class="panel controls-panel" role="region" aria-labelledby="controlsHeading">
+        <nav class="section-nav" aria-label="Jump to section">
+            <span class="section-nav-label" aria-hidden="true">Jump to</span>
+            <ul class="section-nav-list">
+                <li><a href="#controlsSection">Load &amp; filter</a></li>
+                <li><a href="#summarySection">Key metrics</a></li>
+                <li data-section-link="chartsSection"><a href="#chartsSection">Charts</a></li>
+                <li data-section-link="creditsSection" hidden><a href="#creditsSection">AI Credits</a></li>
+                <li data-section-link="tablesSection" hidden><a href="#tablesSection">Reference tables</a></li>
+                <li data-section-link="userUsageSection" hidden><a href="#userUsageSection">Per-user detail</a></li>
+            </ul>
+        </nav>
+        <section id="controlsSection" class="panel controls-panel" role="region" aria-labelledby="controlsHeading">
             <div class="section-heading section-heading-compact controls-heading">
                 <div class="heading-copy">
                     <h2 id="controlsHeading" class="panel-title">Load metrics and filter the view</h2>
@@ -61,6 +72,15 @@
                                 </div>
                                 <input type="file" id="jsonFileInput" class="visually-hidden-file" accept=".json,.jsonl,.ndjson,.txt,application/json" aria-describedby="metricsFileHelp" required />
                                 <div id="metricsFileHelp" class="assist-text">JSON or JSON Lines export.</div>
+                            </div>
+                            <div class="control-item file-picker toolbar-item toolbar-item-wide" id="aiCreditsFileWrap">
+                                <label for="aiCreditsFileInput">AI Credits usage report <span class="optional">(optional)</span></label>
+                                <div class="upload-inline">
+                                    <button type="button" id="aiCreditsFileTrigger" class="file-upload-trigger">Choose file</button>
+                                    <span id="aiCreditsFileName" class="file-upload-name">No file chosen</span>
+                                </div>
+                                <input type="file" id="aiCreditsFileInput" class="visually-hidden-file" accept=".csv,text/csv" aria-describedby="aiCreditsFileHelp" />
+                                <div id="aiCreditsFileHelp" class="assist-text">CSV export of premium request / AI credit usage. Adds a cost dashboard and per-user spend.</div>
                             </div>
                             <details class="advanced-filters" id="advancedFilters">
                                 <summary><span class="summary-label">Date range</span></summary>
@@ -103,6 +123,7 @@
                                 <button type="button" id="resetFiltersBtn" class="secondary">Reset</button>
                                 <button type="button" id="downloadPdfBtn" class="secondary" disabled aria-label="Download dashboard as PDF">Download PDF</button>
                                 <button type="button" id="userUsageBtn" class="secondary" disabled aria-label="View per-user detail table">User table</button>
+                                <button type="button" id="clearDataBtn" class="secondary danger-action" disabled aria-label="Clear all loaded data and reset the dashboard">Clear</button>
                             </div>
                             <div class="side-details">
                                 <details class="compact-details" id="membersOptions">
@@ -161,7 +182,7 @@
             <div id="statusMessage" class="status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
         </section>
 
-        <section class="panel metrics-panel" role="region" aria-labelledby="summaryHeading">
+        <section id="summarySection" class="panel metrics-panel" role="region" aria-labelledby="summaryHeading">
             <div class="section-heading section-heading-compact">
                 <div>
                     <p class="section-kicker">Overview</p>
@@ -181,6 +202,19 @@
                 </div>
             </div>
             <div id="chartsContainer" class="charts-grid" aria-live="polite"></div>
+        </section>
+
+        <section id="creditsSection" class="panel charts-panel" role="region" aria-labelledby="creditsHeading" tabindex="-1" hidden>
+            <div class="section-heading section-heading-compact">
+                <div>
+                    <p class="section-kicker">Cost</p>
+                    <h2 id="creditsHeading" class="panel-title">AI Credits &amp; cost</h2>
+                    <p class="panel-intro">Premium request / AI credit spend from the uploaded usage report, filtered by the same date, user, and members-only controls. 1 AI credit = $0.01.</p>
+                </div>
+            </div>
+            <div id="creditsMetrics" class="metrics-grid" aria-live="polite"></div>
+            <div id="creditsCharts" class="charts-grid" aria-live="polite"></div>
+            <div id="creditsTables" class="table-blocks" aria-live="polite"></div>
         </section>
 
         <section id="tablesSection" class="panel tables-panel" role="region" aria-labelledby="tablesHeading" hidden>
@@ -221,17 +255,24 @@
     </div>
 
     <footer class="app-footer small-note">
-        <span>Aligned to the current GitHub Copilot usage metrics schema. Everything is processed locally in your browser.</span>
+        <span>Aligned to the current GitHub Copilot usage metrics schema, including AI adoption phase, cloud/coding agent usage, and optional AI Credits cost reporting. Everything is processed locally in your browser.</span>
     </footer>
 
-    <script src="https://code.highcharts.com/highcharts.js"></script>
-    <script src="https://code.highcharts.com/modules/exporting.js"></script>
-    <script src="https://code.highcharts.com/modules/export-data.js"></script>
-    <script src="https://code.highcharts.com/modules/heatmap.js"></script>
-    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <button type="button" id="backToTopBtn" class="back-to-top" aria-label="Back to top" title="Back to top">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M12 19V5" />
+            <path d="M5 12l7-7 7 7" />
+        </svg>
+    </button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.4.8/highcharts.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.4.8/modules/exporting.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.4.8/modules/export-data.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.4.8/modules/heatmap.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.4.8/modules/accessibility.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- Libraries for enhanced PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/3.0.2/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=20260709-4"></script>
 </body>
 </html>
