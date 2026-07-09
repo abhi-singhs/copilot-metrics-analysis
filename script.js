@@ -116,8 +116,8 @@ function updateThemeToggleState(theme = getCurrentTheme()) {
     const toggle = document.getElementById('themeToggle');
     if (!toggle) return;
     const isDark = theme === 'dark';
-    toggle.setAttribute('aria-checked', isDark ? 'true' : 'false');
     toggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+    toggle.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
 }
 
 function refreshThemeCharts() {
@@ -164,9 +164,9 @@ function setupHighchartsTheme() {
     Highcharts.setOptions({
         chart: {
             backgroundColor: 'transparent',
-            style: { fontFamily: 'ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }
+            style: { fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji"' }
         },
-        colors: tokens.chartColors.length ? tokens.chartColors : ['#0b5bd3', '#0f766e', '#7c3aed', '#b45309', '#2563eb', '#be185d', '#1d4ed8', '#15803d', '#9333ea', '#c2410c'],
+        colors: tokens.chartColors.length ? tokens.chartColors : ['#0969da', '#8250df', '#1a7f37', '#bc4c00', '#bf3989', '#136061', '#218bff', '#2da44e', '#a475f9', '#e16f24'],
         title: { style: { color: tokens.text, fontWeight: '700', fontSize: '15px' } },
         subtitle: { style: { color: tokens.textDim, fontSize: '12px' } },
         xAxis: {
