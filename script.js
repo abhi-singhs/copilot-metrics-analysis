@@ -302,7 +302,85 @@ document.addEventListener('DOMContentLoaded', () => {
     if (exportUsersCsvBtn) {
         exportUsersCsvBtn.addEventListener('click', () => exportUserUsageCsv());
     }
+
+    initializeHeaderHeightVar();
+    initializeSectionNav();
+    initializeBackToTop();
 });
+
+function initializeHeaderHeightVar() {
+    const header = document.querySelector('header.app-header');
+    if (!header) return;
+    const setVar = () => {
+        document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+    };
+    setVar();
+    if (typeof ResizeObserver === 'function') {
+        new ResizeObserver(setVar).observe(header);
+    } else {
+        window.addEventListener('resize', setVar);
+    }
+}
+
+function initializeSectionNav() {
+    const nav = document.querySelector('.section-nav');
+    if (!nav) return;
+
+    // Smooth-scroll to the target section and move focus for accessibility.
+    nav.addEventListener('click', (e) => {
+        const link = e.target.closest('a[href^="#"]');
+        if (!link) return;
+        const id = link.getAttribute('href').slice(1);
+        const target = document.getElementById(id);
+        if (!target) return;
+        e.preventDefault();
+        target.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
+        if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+        target.focus({ preventScroll: true });
+        if (window.history && typeof window.history.replaceState === 'function') {
+            window.history.replaceState(null, '', '#' + id);
+        }
+    });
+
+    // Keep each jump link in sync with its section's visibility.
+    const toggleable = ['chartsSection', 'creditsSection', 'tablesSection', 'userUsageSection'];
+    const sync = (sectionId) => {
+        const li = nav.querySelector('li[data-section-link="' + sectionId + '"]');
+        const section = document.getElementById(sectionId);
+        if (li && section) li.hidden = !!section.hidden;
+    };
+    toggleable.forEach((sectionId) => {
+        const section = document.getElementById(sectionId);
+        if (!section) return;
+        sync(sectionId);
+        new MutationObserver(() => sync(sectionId))
+            .observe(section, { attributes: true, attributeFilter: ['hidden'] });
+    });
+}
+
+function initializeBackToTop() {
+    const btn = document.getElementById('backToTopBtn');
+    if (!btn) return;
+    const showAfter = 320;
+    let ticking = false;
+    const update = () => {
+        ticking = false;
+        const y = window.scrollY || document.documentElement.scrollTop || 0;
+        btn.classList.toggle('is-visible', y > showAfter);
+    };
+    const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    update();
+    btn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, left: 0, behavior: preferredScrollBehavior() });
+        const main = document.getElementById('mainContent');
+        if (main) main.focus({ preventScroll: true });
+    });
+}
 
 function syncSelectedFileName(inputEl, outputId, emptyText = 'No file chosen') {
     const outputEl = document.getElementById(outputId);
