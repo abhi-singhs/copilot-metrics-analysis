@@ -1728,8 +1728,8 @@ function createHeatmap(title, xCategories, yCategories, dataPoints, colorAxisTit
     Highcharts.chart(div, {
     chart: { type: 'heatmap', backgroundColor: 'transparent', height: 480 },
         title: { text: title, style: { fontSize: '15px' } },
-        xAxis: { categories: xCategories, labels: { style: { fontSize: '12px' }, rotation: 40 } },
-        yAxis: { categories: yCategories, title: null, labels: { style: { fontSize: '12px' } }, reversed: true },
+        xAxis: { categories: xCategories, type: 'category', min: 0, max: Math.max(0, xCategories.length - 1), tickInterval: 1, labels: { style: { fontSize: '12px' }, rotation: 40 } },
+        yAxis: { categories: yCategories, type: 'category', title: null, min: 0, max: Math.max(0, yCategories.length - 1), tickInterval: 1, labels: { style: { fontSize: '12px' } }, reversed: true },
         accessibility: { enabled: true },
         legend: { align: 'right', layout: 'vertical', verticalAlign: 'middle' },
         colorAxis: {
