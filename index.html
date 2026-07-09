@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" />
     <script>
         const storedTheme = localStorage.getItem('copilotMetricsTheme');
         const resolvedTheme = storedTheme === 'dark' || storedTheme === 'light'
@@ -12,30 +14,75 @@
         document.documentElement.dataset.theme = resolvedTheme;
     </script>
     <title>GitHub Copilot Metrics Analyzer</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f5f8fd'/%3E%3Cpath d='M8 22h4V14H8zm6 0h4V10h-4zm6 0h4V17h-4z' fill='%230b5bd3'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="style.css?v=20260709-4" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f6f8fa'/%3E%3Cpath d='M8 22h4V14H8zm6 0h4V10h-4zm6 0h4V17h-4z' fill='%230969da'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="style.css?v=20260709-primer-icons-8" />
 </head>
 <body>
+    <svg class="octicon-sprite" aria-hidden="true" focusable="false">
+        <symbol id="icon-mark-github" viewBox="0 0 16 16">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 4.58c.68 0 1.36.09 2 .26 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+        </symbol>
+        <symbol id="icon-book" viewBox="0 0 16 16">
+            <path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-8.073A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574Zm1.5 0a3.75 3.75 0 0 1 1.992-.574H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 1.501Z" />
+        </symbol>
+        <symbol id="icon-upload" viewBox="0 0 16 16">
+            <path d="M7.25 11.5a.75.75 0 0 0 1.5 0V4.56l2.22 2.22a.749.749 0 1 0 1.06-1.06l-3.5-3.5a.749.749 0 0 0-1.06 0l-3.5 3.5a.749.749 0 1 0 1.06 1.06l2.22-2.22ZM1.5 10.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 2.75 16h10.5A2.75 2.75 0 0 0 16 13.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H2.75c-.69 0-1.25-.56-1.25-1.25Z" />
+        </symbol>
+        <symbol id="icon-play" viewBox="0 0 16 16">
+            <path d="M2.5 2.75c0-.59.64-.96 1.14-.65l10.5 6.25a.75.75 0 0 1 0 1.3L3.64 15.9a.75.75 0 0 1-1.14-.65Z" />
+        </symbol>
+        <symbol id="icon-filter" viewBox="0 0 16 16">
+            <path d="M1.5 2.75A.75.75 0 0 1 2.25 2h11.5a.75.75 0 0 1 .53 1.28L10 7.56v5.69a.75.75 0 0 1-1.14.64l-2-1.2a.75.75 0 0 1-.36-.64V7.56L1.72 3.28a.75.75 0 0 1-.22-.53Z" />
+        </symbol>
+        <symbol id="icon-graph" viewBox="0 0 16 16">
+            <path d="M1.75 1a.75.75 0 0 1 .75.75v11.5c0 .138.112.25.25.25h11.5a.75.75 0 0 1 0 1.5H2.75A1.75 1.75 0 0 1 1 13.25V1.75A.75.75 0 0 1 1.75 1Zm12.78 4.53-4.75 4.75a.75.75 0 0 1-1.06 0L6.5 8.06l-2.47 2.47a.749.749 0 0 1-1.06-1.06l3-3a.75.75 0 0 1 1.06 0l2.22 2.22 4.22-4.22a.749.749 0 1 1 1.06 1.06Z" />
+        </symbol>
+        <symbol id="icon-table" viewBox="0 0 16 16">
+            <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25Zm1.75-.25a.25.25 0 0 0-.25.25V5h13V2.75a.25.25 0 0 0-.25-.25Zm12.75 4h-13v6.75c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25Z" />
+        </symbol>
+        <symbol id="icon-people" viewBox="0 0 16 16">
+            <path d="M5.5 7a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM1 14.25c0-2.071 2.015-3.75 4.5-3.75s4.5 1.679 4.5 3.75a.75.75 0 0 1-.75.75h-7.5a.75.75 0 0 1-.75-.75Zm10.5-6.75a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm-.5 6.75c0-.839-.237-1.62-.645-2.293.431-.286.957-.457 1.52-.457 1.45 0 2.625 1.007 2.625 2.25a.75.75 0 0 1-.75.75H11Z" />
+        </symbol>
+        <symbol id="icon-credit-card" viewBox="0 0 16 16">
+            <path d="M1.75 2A1.75 1.75 0 0 0 0 3.75v8.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-8.5A1.75 1.75 0 0 0 14.25 2Zm12.5 1.5c.138 0 .25.112.25.25V5h-13V3.75c0-.138.112-.25.25-.25ZM1.5 7h13v5.25a.25.25 0 0 1-.25.25H1.75a.25.25 0 0 1-.25-.25Z" />
+        </symbol>
+        <symbol id="icon-download" viewBox="0 0 16 16">
+            <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 1.75a.75.75 0 0 1 1.5 0v6.69l2.22-2.22a.749.749 0 1 1 1.06 1.06l-3.5 3.5a.749.749 0 0 1-1.06 0l-3.5-3.5a.749.749 0 1 1 1.06-1.06l2.22 2.22Z" />
+        </symbol>
+        <symbol id="icon-sync" viewBox="0 0 16 16">
+            <path d="M5.78 1.97a.75.75 0 0 1 0 1.06L4.56 4.25H9a4.75 4.75 0 0 1 4.546 6.121.75.75 0 0 1-1.436-.434A3.25 3.25 0 0 0 9 5.75H4.56l1.22 1.22a.749.749 0 1 1-1.06 1.06l-2.5-2.5a.75.75 0 0 1 0-1.06l2.5-2.5a.75.75 0 0 1 1.06 0Zm4.44 12.06a.75.75 0 0 1 0-1.06l1.22-1.22H7A4.75 4.75 0 0 1 2.454 5.63a.75.75 0 1 1 1.436.434A3.25 3.25 0 0 0 7 10.25h4.44l-1.22-1.22a.749.749 0 1 1 1.06-1.06l2.5 2.5a.75.75 0 0 1 0 1.06l-2.5 2.5a.75.75 0 0 1-1.06 0Z" />
+        </symbol>
+        <symbol id="icon-trash" viewBox="0 0 16 16">
+            <path d="M6.5 1.75A.75.75 0 0 1 7.25 1h1.5a.75.75 0 0 1 .75.75V2h3.75a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H6.5ZM4 5.25a.75.75 0 0 1 1.5 0v7a.75.75 0 0 0 .75.75h3.5a.75.75 0 0 0 .75-.75v-7a.75.75 0 0 1 1.5 0v7A2.25 2.25 0 0 1 9.75 14.5h-3.5A2.25 2.25 0 0 1 4 12.25Z" />
+        </symbol>
+        <symbol id="icon-tag" viewBox="0 0 16 16">
+            <path d="M7.75 1h-4A2.75 2.75 0 0 0 1 3.75v4c0 .729.29 1.429.805 1.945l4.75 4.75a1.914 1.914 0 0 0 2.707 0l5.183-5.183a1.914 1.914 0 0 0 0-2.707l-4.75-4.75A2.75 2.75 0 0 0 7.75 1ZM4.5 5.75a1.25 1.25 0 1 1 2.5 0 1.25 1.25 0 0 1-2.5 0Z" />
+        </symbol>
+        <symbol id="icon-sun" viewBox="0 0 16 16">
+            <path d="M8 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-1.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm5.657-8.157a.75.75 0 0 1 0 1.061l-1.061 1.06a.749.749 0 0 1-1.06 0 .749.749 0 0 1 0-1.06l1.06-1.061a.75.75 0 0 1 1.061 0Zm-9.193 9.193a.75.75 0 0 1 0 1.06l-1.06 1.061a.75.75 0 1 1-1.061-1.06l1.06-1.061a.75.75 0 0 1 1.061 0ZM8 0a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0V.75A.75.75 0 0 1 8 0ZM3 8a.75.75 0 0 1-.75.75H.75a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 3 8Zm13 0a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 16 8Zm-8 5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 13ZM2.343 13.657a.75.75 0 0 1 0-1.06l1.061-1.061a.75.75 0 0 1 1.06 1.06l-1.06 1.061a.75.75 0 0 1-1.061 0ZM11.536 4.464a.75.75 0 0 1 0-1.06l1.06-1.061a.75.75 0 1 1 1.061 1.06l-1.06 1.061a.75.75 0 0 1-1.061 0Z" />
+        </symbol>
+        <symbol id="icon-moon" viewBox="0 0 16 16">
+            <path d="M9.598 1.591a.749.749 0 0 1 .785-.175 7.001 7.001 0 1 1-8.967 8.967.75.75 0 0 1 .961-.96 5.5 5.5 0 0 0 7.046-7.046.75.75 0 0 1 .175-.786Zm1.616 1.945a7 7 0 0 1-7.678 7.678 5.499 5.499 0 1 0 7.678-7.678Z" />
+        </symbol>
+    </svg>
     <a class="skip-link" href="#mainContent">Skip to dashboard content</a>
     <header class="app-header">
         <div class="logo-title">
+            <svg class="octicon brand-icon" aria-hidden="true" focusable="false"><use href="#icon-mark-github"></use></svg>
             <div class="title-stack">
                 <p class="section-kicker header-kicker">Local analytics</p>
                 <h1>GitHub Copilot Metrics Analyzer</h1>
-                <p class="header-subtitle">Upload a Copilot metrics export to review adoption and usage locally.</p>
             </div>
         </div>
         <nav class="top-nav" aria-label="Primary">
             <ul class="nav-list">
                 <li>
-                    <button type="button" id="themeToggle" class="theme-toggle" role="switch" aria-checked="false">
-                        <span class="theme-toggle-track" aria-hidden="true">
-                            <span class="theme-toggle-thumb"></span>
-                        </span>
-                        <span class="theme-toggle-label">Dark mode</span>
+                    <button type="button" id="themeToggle" class="theme-toggle icon-button" aria-label="Switch to dark mode">
+                        <svg class="octicon theme-icon-sun" aria-hidden="true" focusable="false"><use href="#icon-sun"></use></svg>
+                        <svg class="octicon theme-icon-moon" aria-hidden="true" focusable="false"><use href="#icon-moon"></use></svg>
                     </button>
                 </li>
-                <li><a href="https://github.com/abhi-singhs/copilot-metrics-analysis/blob/main/README.md" target="_blank" rel="noopener noreferrer" aria-label="Open usage guide README in new tab">Usage guide</a></li>
+                <li><a href="https://github.com/abhi-singhs/copilot-metrics-analysis/blob/main/README.md" target="_blank" rel="noopener noreferrer" aria-label="Open usage guide README in new tab"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-book"></use></svg>Usage guide</a></li>
             </ul>
         </nav>
     </header>
@@ -43,18 +90,18 @@
         <nav class="section-nav" aria-label="Jump to section">
             <span class="section-nav-label" aria-hidden="true">Jump to</span>
             <ul class="section-nav-list">
-                <li><a href="#controlsSection">Load &amp; filter</a></li>
-                <li><a href="#summarySection">Key metrics</a></li>
-                <li data-section-link="chartsSection"><a href="#chartsSection">Charts</a></li>
-                <li data-section-link="creditsSection" hidden><a href="#creditsSection">AI Credits</a></li>
-                <li data-section-link="tablesSection" hidden><a href="#tablesSection">Reference tables</a></li>
-                <li data-section-link="userUsageSection" hidden><a href="#userUsageSection">Per-user detail</a></li>
+                <li><a href="#controlsSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-filter"></use></svg>Load &amp; filter</a></li>
+                <li><a href="#summarySection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Key metrics</a></li>
+                <li data-section-link="chartsSection"><a href="#chartsSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Charts</a></li>
+                <li data-section-link="creditsSection" hidden><a href="#creditsSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-credit-card"></use></svg>AI Credits</a></li>
+                <li data-section-link="tablesSection" hidden><a href="#tablesSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-table"></use></svg>Reference tables</a></li>
+                <li data-section-link="userUsageSection" hidden><a href="#userUsageSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-people"></use></svg>Per-user detail</a></li>
             </ul>
         </nav>
         <section id="controlsSection" class="panel controls-panel" role="region" aria-labelledby="controlsHeading">
             <div class="section-heading section-heading-compact controls-heading">
                 <div class="heading-copy">
-                    <h2 id="controlsHeading" class="panel-title">Load metrics and filter the view</h2>
+                    <h2 id="controlsHeading" class="panel-title"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-upload"></use></svg>Load metrics and filter the view</h2>
                     <p class="panel-intro">Upload a metrics export, then filter or export the current view. Everything stays in your browser.</p>
                 </div>
             </div>
@@ -66,9 +113,9 @@
                             <div class="control-item file-picker toolbar-item toolbar-item-wide" id="metricsFileWrap">
                                 <label for="jsonFileInput">Copilot metrics export<span class="req-indicator" aria-hidden="true">*</span></label>
                                 <div class="upload-inline">
-                                    <button type="button" id="jsonFileTrigger" class="file-upload-trigger">Choose file</button>
+                                    <button type="button" id="jsonFileTrigger" class="file-upload-trigger"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-upload"></use></svg>Choose file</button>
                                     <span id="jsonFileName" class="file-upload-name">No file chosen</span>
-                                    <button type="button" id="analyzeBtn" class="primary-action">Load metrics</button>
+                                    <button type="button" id="analyzeBtn" class="primary-action"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-play"></use></svg>Load metrics</button>
                                 </div>
                                 <input type="file" id="jsonFileInput" class="visually-hidden-file" accept=".json,.jsonl,.ndjson,.txt,application/json" aria-describedby="metricsFileHelp" required />
                                 <div id="metricsFileHelp" class="assist-text">JSON or JSON Lines export.</div>
@@ -76,7 +123,7 @@
                             <div class="control-item file-picker toolbar-item toolbar-item-wide" id="aiCreditsFileWrap">
                                 <label for="aiCreditsFileInput">AI Credits usage report <span class="optional">(optional)</span></label>
                                 <div class="upload-inline">
-                                    <button type="button" id="aiCreditsFileTrigger" class="file-upload-trigger">Choose file</button>
+                                    <button type="button" id="aiCreditsFileTrigger" class="file-upload-trigger"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-upload"></use></svg>Choose file</button>
                                     <span id="aiCreditsFileName" class="file-upload-name">No file chosen</span>
                                 </div>
                                 <input type="file" id="aiCreditsFileInput" class="visually-hidden-file" accept=".csv,text/csv" aria-describedby="aiCreditsFileHelp" />
@@ -119,15 +166,15 @@
                                 </div>
                             </div>
                             <div class="actions-row actions-row-compact" role="group" aria-label="Dashboard actions">
-                                <button type="button" id="applyFiltersBtn" class="secondary" disabled aria-label="Apply current filters">Apply</button>
-                                <button type="button" id="resetFiltersBtn" class="secondary">Reset</button>
-                                <button type="button" id="downloadPdfBtn" class="secondary" disabled aria-label="Download dashboard as PDF">Download PDF</button>
-                                <button type="button" id="userUsageBtn" class="secondary" disabled aria-label="View per-user detail table">User table</button>
-                                <button type="button" id="clearDataBtn" class="secondary danger-action" disabled aria-label="Clear all loaded data and reset the dashboard">Clear</button>
+                                <button type="button" id="applyFiltersBtn" class="secondary" disabled aria-label="Apply current filters"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-filter"></use></svg>Apply</button>
+                                <button type="button" id="resetFiltersBtn" class="secondary"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-sync"></use></svg>Reset</button>
+                                <button type="button" id="downloadPdfBtn" class="secondary" disabled aria-label="Download dashboard as PDF"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg>Download PDF</button>
+                                <button type="button" id="userUsageBtn" class="secondary" disabled aria-label="View per-user detail table"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-table"></use></svg>User table</button>
+                                <button type="button" id="clearDataBtn" class="secondary danger-action" disabled aria-label="Clear all loaded data and reset the dashboard"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-trash"></use></svg>Clear</button>
                             </div>
                             <div class="side-details">
                                 <details class="compact-details" id="membersOptions">
-                                    <summary>Members <span class="optional">(optional)</span></summary>
+                                    <summary><span class="summary-copy"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-people"></use></svg>Members <span class="optional">(optional)</span></span></summary>
                                     <div class="compact-details-body">
                                         <p class="assist-text compact-note">Fetch members with a PAT or upload a file with <code>login</code> fields.</p>
                                         <div class="control-item control-item-full">
@@ -154,13 +201,13 @@
                                             </div>
                                         </div>
                                         <div class="details-actions">
-                                            <button type="button" id="fetchApiBtn" class="secondary" style="display: none;" aria-label="Fetch organization members from GitHub API">Load members</button>
+                                            <button type="button" id="fetchApiBtn" class="secondary" style="display: none;" aria-label="Fetch organization members from GitHub API"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-people"></use></svg>Load members</button>
                                         </div>
                                     </div>
                                 </details>
 
                                 <details class="compact-details" id="pdfLabelsDetails">
-                                    <summary>PDF labels <span class="optional">(optional)</span></summary>
+                                    <summary><span class="summary-copy"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-tag"></use></svg>PDF labels <span class="optional">(optional)</span></span></summary>
                                     <div class="compact-details-body">
                                         <div class="controls-grid controls-grid-compact">
                                             <div class="control-item">
@@ -186,7 +233,7 @@
             <div class="section-heading section-heading-compact">
                 <div>
                     <p class="section-kicker">Overview</p>
-                    <h2 id="summaryHeading" class="panel-title">Key metrics</h2>
+                    <h2 id="summaryHeading" class="panel-title"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Key metrics</h2>
                     <p class="panel-intro">The most important adoption, interaction, and code generation signals from the current filter set appear here first.</p>
                 </div>
             </div>
@@ -197,7 +244,7 @@
             <div class="section-heading section-heading-compact">
                 <div>
                     <p class="section-kicker">Analysis</p>
-                    <h2 id="chartsHeading" class="panel-title">Charts and visual breakdowns</h2>
+                    <h2 id="chartsHeading" class="panel-title"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Charts and visual breakdowns</h2>
                     <p class="panel-intro">These charts group related adoption, usage, model, language, and code generation trends based on the current filters.</p>
                 </div>
             </div>
@@ -208,7 +255,7 @@
             <div class="section-heading section-heading-compact">
                 <div>
                     <p class="section-kicker">Cost</p>
-                    <h2 id="creditsHeading" class="panel-title">AI Credits &amp; cost</h2>
+                    <h2 id="creditsHeading" class="panel-title"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-credit-card"></use></svg>AI Credits &amp; cost</h2>
                     <p class="panel-intro">Premium request / AI credit spend from the uploaded usage report, filtered by the same date, user, and members-only controls. 1 AI credit = $0.01.</p>
                 </div>
             </div>
@@ -221,7 +268,7 @@
             <div class="section-heading section-heading-compact">
                 <div>
                     <p class="section-kicker">Reference</p>
-                    <h2 id="tablesHeading" class="panel-title">Reference tables</h2>
+                    <h2 id="tablesHeading" class="panel-title"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-table"></use></svg>Reference tables</h2>
                     <p class="panel-intro">Daily rollups and breakdown tables generated from the current filters for deeper inspection or spot checks.</p>
                 </div>
             </div>
@@ -232,11 +279,11 @@
             <div class="user-usage-header">
                 <div>
                     <p class="section-kicker">Per-user view</p>
-                    <h2 id="userUsageHeading" class="panel-title">Per-user detail</h2>
+                    <h2 id="userUsageHeading" class="panel-title"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-people"></use></svg>Per-user detail</h2>
                 </div>
                 <div class="user-usage-actions">
-                    <button type="button" id="exportUsersCsvBtn" class="secondary" disabled aria-label="Export per-user usage as CSV">Export CSV</button>
-                    <button type="button" id="backToDashboardBtn" class="secondary" aria-label="Return to charts dashboard">Back to overview</button>
+                    <button type="button" id="exportUsersCsvBtn" class="secondary" disabled aria-label="Export per-user usage as CSV"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg>Export CSV</button>
+                    <button type="button" id="backToDashboardBtn" class="secondary" aria-label="Return to charts dashboard"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Back to overview</button>
                 </div>
             </div>
             <p class="small-note" id="userUsageNote">Aggregated user-level metrics based on the current filters, including activity flags, CLI usage, and richer LoC totals when the export contains user records. Use the column buttons to sort the table.</p>
@@ -273,6 +320,6 @@
     <!-- Libraries for enhanced PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/3.0.2/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="script.js?v=20260709-4"></script>
+    <script src="script.js?v=20260709-primer"></script>
 </body>
 </html>
