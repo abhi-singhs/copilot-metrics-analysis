@@ -254,7 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadBtn = document.getElementById('downloadPdfBtn');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', () => {
-            if (!window.__rawData || !window.__rawData.length) return;
+            const hasMetrics = window.__rawData && window.__rawData.length;
+            const hasCredits = window.__aiCreditsRaw && window.__aiCreditsRaw.length;
+            if (!hasMetrics && !hasCredits) return;
             generatePdfReport();
         });
     }
@@ -268,6 +270,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const membersInputEl = document.getElementById('membersFileInput');
     if (membersInputEl) {
         membersInputEl.addEventListener('change', () => membersInputEl.files && handleMembersFile(membersInputEl.files[0]));
+    }
+
+    // AI Credits (premium request) CSV upload
+    const aiCreditsInputEl = document.getElementById('aiCreditsFileInput');
+    const aiCreditsTriggerEl = document.getElementById('aiCreditsFileTrigger');
+    if (aiCreditsTriggerEl && aiCreditsInputEl) {
+        aiCreditsTriggerEl.addEventListener('click', () => aiCreditsInputEl.click());
+    }
+    if (aiCreditsInputEl) {
+        syncSelectedFileName(aiCreditsInputEl, 'aiCreditsFileName');
+        aiCreditsInputEl.addEventListener('change', () => {
+            syncSelectedFileName(aiCreditsInputEl, 'aiCreditsFileName');
+            if (aiCreditsInputEl.files && aiCreditsInputEl.files[0]) handleAiCreditsFile(aiCreditsInputEl.files[0]);
+        });
     }
 
     // Per-user usage view navigation & export
@@ -299,6 +315,7 @@ function syncSelectedFileName(inputEl, outputId, emptyText = 'No file chosen') {
 function looksLikeUsageRecordObject(obj) {
     if (!obj || typeof obj !== 'object') return false;
     return [
+        'ai_adoption_phase',
         'day',
         'day_totals',
         'enterprise_id',
@@ -309,6 +326,8 @@ function looksLikeUsageRecordObject(obj) {
         'totals_by_cli',
         'totals_by_feature',
         'totals_by_ide',
+        'used_copilot_cloud_agent',
+        'used_copilot_coding_agent',
         'user_id',
         'user_login'
     ].some(key => Object.prototype.hasOwnProperty.call(obj, key));
@@ -548,10 +567,13 @@ function analyzeData(data) {
 
     if (!data || data.length === 0) {
         const hasLoadedData = Boolean(window.__rawData && window.__rawData.length);
+        const hasCredits = Boolean(window.__aiCreditsRaw && window.__aiCreditsRaw.length);
         setStatus(
             hasLoadedData
                 ? 'No records match the current filters. Widen the date range, clear user search, or turn off the members-only filter.'
-                : 'Ready for a metrics export. Upload a JSON or JSON Lines file to populate the dashboard.'
+                : (hasCredits
+                    ? 'AI Credits report loaded. Upload a usage-metrics JSON/JSONL file to combine credit cost with engagement metrics.'
+                    : 'Ready for a metrics export. Upload a JSON or JSON Lines file to populate the dashboard.')
         );
         const tablesSection = document.getElementById('tablesSection');
         if (tablesSection) tablesSection.hidden = true;
@@ -560,6 +582,7 @@ function analyzeData(data) {
         if (downloadBtn) downloadBtn.disabled = true;
         const userUsageBtn = document.getElementById('userUsageBtn');
         if (userUsageBtn) userUsageBtn.disabled = true;
+        updateCreditsView();
         return;
     }
 
@@ -570,6 +593,7 @@ function analyzeData(data) {
     computeSummaryMetrics(model);
     renderCharts(model);
     renderReferenceTables(model);
+    updateCreditsView();
     enableDownloadButton();
 
     const userUsageBtn = document.getElementById('userUsageBtn');
@@ -616,8 +640,11 @@ function buildDashboardModel(data) {
     const chatUsers = new Set();
     const agentUsers = new Set();
     const cliUsers = new Set();
+    const cloudAgentUsers = new Set();
+    const codingAgentUsers = new Set();
     const reviewActiveUsers = new Set();
     const reviewPassiveUsers = new Set();
+    const userAdoptionPhase = new Map();
 
     let totalInteractions = 0;
     let totalGenerations = 0;
@@ -625,6 +652,8 @@ function buildDashboardModel(data) {
     let hasCli = false;
     let hasPullRequests = false;
     let hasCodeReview = false;
+    let hasCloudAgent = false;
+    let hasCodingAgent = false;
 
     overallRecords.forEach(record => {
         const day = record.day || '';
@@ -737,6 +766,25 @@ function buildDashboardModel(data) {
             getOrCreateMapValue(dayReviewPassiveSets, day, () => new Set()).add(userKey);
             hasCodeReview = true;
         }
+        if (record.used_copilot_cloud_agent) {
+            cloudAgentUsers.add(userKey);
+            hasCloudAgent = true;
+        }
+        if (record.used_copilot_coding_agent) {
+            codingAgentUsers.add(userKey);
+            hasCodingAgent = true;
+        }
+        if (record.ai_adoption_phase && typeof record.ai_adoption_phase === 'object') {
+            const existing = userAdoptionPhase.get(userKey);
+            if (!existing || day >= existing.day) {
+                userAdoptionPhase.set(userKey, {
+                    phase: record.ai_adoption_phase.phase || 'Unknown',
+                    phase_number: toNum(record.ai_adoption_phase.phase_number),
+                    version: record.ai_adoption_phase.version || '',
+                    day
+                });
+            }
+        }
     });
 
     const daySet = new Set([
@@ -777,6 +825,23 @@ function buildDashboardModel(data) {
             active_users: row.code_review_active_users,
             passive_users: row.code_review_passive_users
         }));
+
+    const adoptionPhaseMap = new Map();
+    userAdoptionPhase.forEach(info => {
+        const key = info.phase || 'Unknown';
+        const row = getOrCreateMapValue(adoptionPhaseMap, key, () => ({
+            phase: key,
+            phase_number: info.phase_number,
+            users: 0
+        }));
+        row.users += 1;
+        row.phase_number = info.phase_number;
+    });
+    const adoptionPhaseRows = Array.from(adoptionPhaseMap.values())
+        .sort((a, b) => (a.phase_number - b.phase_number) || a.phase.localeCompare(b.phase));
+    const topAdoptionPhase = adoptionPhaseRows.length
+        ? [...adoptionPhaseRows].sort((a, b) => b.users - a.users)[0].phase
+        : 'n/a';
 
     const latestDailyRow = dailyRows[dailyRows.length - 1] || createDailyOverviewRow('');
     const latestDailyActiveUsers = toNum(latestDailyRow.daily_active_users);
@@ -840,6 +905,9 @@ function buildDashboardModel(data) {
             hasCli,
             hasPullRequests,
             hasCodeReview,
+            hasCloudAgent,
+            hasCodingAgent,
+            hasAdoptionPhase: adoptionPhaseRows.length > 0,
             days,
             latestDay: days[days.length - 1] || '',
             earliestDay: days[0] || ''
@@ -867,6 +935,9 @@ function buildDashboardModel(data) {
             cliUsers: cliUsers.size,
             reviewActiveUsers: reviewActiveUsers.size,
             reviewPassiveUsers: reviewPassiveUsers.size,
+            cloudAgentUsers: cloudAgentUsers.size,
+            codingAgentUsers: codingAgentUsers.size,
+            topAdoptionPhase,
             pullRequests: pullRequestTotals,
             cli: cliTotals
         },
@@ -879,7 +950,8 @@ function buildDashboardModel(data) {
             modelRows,
             cliDayRows,
             pullRequestDayRows,
-            codeReviewDayRows
+            codeReviewDayRows,
+            adoptionPhaseRows
         },
         matrices: {
             dayLanguageMap,
@@ -963,6 +1035,15 @@ function renderCharts(model) {
 
     if (model.breakdowns.weeklyRows.length) {
         createChart('Weekly Active Users', 'line', model.breakdowns.weeklyRows.map(row => row.label), model.breakdowns.weeklyRows.map(row => row.value));
+    }
+
+    if (model.breakdowns.adoptionPhaseRows && model.breakdowns.adoptionPhaseRows.length) {
+        createChart(
+            'AI Adoption Phase Distribution',
+            'doughnut',
+            model.breakdowns.adoptionPhaseRows.map(row => row.phase),
+            model.breakdowns.adoptionPhaseRows.map(row => row.users)
+        );
     }
 
     if (model.userRows.length) {
@@ -1198,6 +1279,25 @@ function renderReferenceTables(model) {
                 { key: 'latest_plugin_version', label: 'Latest plugin version' }
             ],
             model.breakdowns.ideRows
+        ));
+    }
+
+    if (model.breakdowns.adoptionPhaseRows && model.breakdowns.adoptionPhaseRows.length) {
+        const totalPhaseUsers = model.breakdowns.adoptionPhaseRows.reduce((acc, row) => acc + toNum(row.users), 0);
+        const phaseRows = model.breakdowns.adoptionPhaseRows.map(row => ({
+            ...row,
+            share: totalPhaseUsers ? (row.users / totalPhaseUsers) * 100 : 0
+        }));
+        blocks.push(renderTableBlock(
+            'AI adoption phases',
+            'Distribution of users across AI adoption phases (each user counted once, using their most recent phase in range).',
+            [
+                { key: 'phase', label: 'Phase' },
+                { key: 'phase_number', label: 'Phase #', type: 'number' },
+                { key: 'users', label: 'Users', type: 'number' },
+                { key: 'share', label: 'Share %', type: 'decimal' }
+            ],
+            phaseRows
         ));
     }
 
@@ -1541,8 +1641,8 @@ function sumNestedMap(map) {
     return total;
 }
 
-function createChart(title, type, categories, seriesData) {
-    const chartsContainer = document.getElementById('chartsContainer');
+function createChart(title, type, categories, seriesData, container) {
+    const chartsContainer = container || document.getElementById('chartsContainer');
     const chartContainer = document.createElement('div');
     chartContainer.classList.add('chart-container');
     chartContainer.setAttribute('role','group');
@@ -1590,8 +1690,8 @@ function createChart(title, type, categories, seriesData) {
     Highcharts.chart(div, buildOptions(categories, seriesData));
 }
 
-function createGroupedBarChart(title, categories, datasets) {
-    const chartsContainer = document.getElementById('chartsContainer');
+function createGroupedBarChart(title, categories, datasets, container) {
+    const chartsContainer = container || document.getElementById('chartsContainer');
     const chartContainer = document.createElement('div');
     chartContainer.classList.add('chart-container');
     chartContainer.setAttribute('role', 'group');
@@ -1657,8 +1757,8 @@ function createHeatmap(title, xCategories, yCategories, dataPoints, colorAxisTit
     });
 }
 
-function createStackedChart(title, categories, series, type='column', stacking='normal') {
-    const chartsContainer = document.getElementById('chartsContainer');
+function createStackedChart(title, categories, series, type='column', stacking='normal', container) {
+    const chartsContainer = container || document.getElementById('chartsContainer');
     const chartContainer = document.createElement('div');
     chartContainer.classList.add('chart-container');
     chartContainer.setAttribute('role','group');
@@ -1707,8 +1807,9 @@ function initializeFilters(data) {
     // Reset text search
     const searchEl = document.getElementById('userSearch');
     if (searchEl) searchEl.value = '';
-    // Reset date range to full span
-    if (days.length) { dateFrom.value = days[0]; dateTo.value = days[days.length - 1]; }
+    // Reset date range to the full span (union of metric days and any credit dates)
+    const allDays = (window.__allDays && window.__allDays.length) ? window.__allDays : days;
+    if (allDays.length) { dateFrom.value = allDays[0]; dateTo.value = allDays[allDays.length - 1]; }
     // Reset members-only filter
     const membersChk = document.getElementById('membersOnlyChk');
     if (membersChk) membersChk.checked = false;
@@ -1729,6 +1830,9 @@ function initializeFilters(data) {
 
     enableApplyButton();
     setupQuickRangeButtons();
+    // If an AI Credits report is already loaded, widen the bounds to the union
+    // so credit dates outside the metrics window remain visible.
+    if (window.__aiCreditsRaw && window.__aiCreditsRaw.length) refreshDateBoundsUnion();
     // Cache initial dataset for user usage table reuse
     window.__currentFilteredData = data;
 }
@@ -1844,6 +1948,19 @@ function computeSummaryMetrics(model) {
             { label: 'Code Review Active Users', value: model.totals.reviewActiveUsers.toLocaleString() },
             { label: 'Code Review Passive Users', value: model.totals.reviewPassiveUsers.toLocaleString() }
         );
+    }
+
+    if (model.meta.hasCloudAgent || model.meta.hasCodingAgent) {
+        if (model.meta.hasCodingAgent) {
+            cards.push({ label: 'Coding Agent Users', value: model.totals.codingAgentUsers.toLocaleString() });
+        }
+        if (model.meta.hasCloudAgent) {
+            cards.push({ label: 'Cloud Agent Users', value: model.totals.cloudAgentUsers.toLocaleString() });
+        }
+    }
+
+    if (model.meta.hasAdoptionPhase) {
+        cards.push({ label: 'Top Adoption Phase', value: model.totals.topAdoptionPhase });
     }
 
     if (model.meta.hasPullRequests) {
@@ -2126,8 +2243,8 @@ async function generatePdfReport() {
     if (enterpriseName && !headerTitle.includes(enterpriseName)) headerSubtitleParts.push(enterpriseName);
     if (orgName && !headerTitle.includes(orgName)) headerSubtitleParts.push(orgName);
     addHeader(headerTitle, headerSubtitleParts.join('  •  '));
-        // Summary metrics: render as text grid (3 columns)
-        const metrics = Array.from(document.querySelectorAll('#summaryMetrics .metric-card'))
+        // Summary metrics: render as text grid (3 columns), including AI Credits cost cards.
+        const metrics = Array.from(document.querySelectorAll('#summaryMetrics .metric-card, #creditsMetrics .metric-card'))
             .map(card => ({ label: card.querySelector('.metric-label')?.textContent?.trim(), value: card.querySelector('.metric-value')?.textContent?.trim() }));
         const colCount = 3;
         const colWidth = (pageWidth - margin * 2) / colCount;
@@ -2255,6 +2372,8 @@ function toggleUserUsage(show) {
     if (!section || !chartsSec) return;
     section.hidden = !show;
     chartsSec.hidden = show;
+    const creditsSec = document.getElementById('creditsSection');
+    if (creditsSec && window.__hasCredits) creditsSec.hidden = show;
     if (show) {
         section.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
         document.getElementById('exportUsersCsvBtn')?.removeAttribute('disabled');
@@ -2265,7 +2384,7 @@ function toggleUserUsage(show) {
     }
 }
 
-function aggregateUserUsage(data) {
+function aggregateUserUsage(data, creditsByUser) {
     const map = new Map();
     data.forEach(r => {
         const login = r.user_login || (r.user_id ? `user-${r.user_id}` : '');
@@ -2284,6 +2403,8 @@ function aggregateUserUsage(data) {
                 cli_days: new Set(),
                 review_active_days: new Set(),
                 review_passive_days: new Set(),
+                cloud_agent_days: new Set(),
+                coding_agent_days: new Set(),
                 models: {},
                 languages: {},
                 features: {},
@@ -2294,7 +2415,8 @@ function aggregateUserUsage(data) {
                 loc_suggested_add: 0,
                 loc_suggested_delete: 0,
                 loc_added: 0,
-                loc_deleted: 0
+                loc_deleted: 0,
+                _adoption: null
             });
         }
         const row = map.get(login);
@@ -2307,6 +2429,17 @@ function aggregateUserUsage(data) {
         if (r.day && (r.used_cli || r.totals_by_cli)) row.cli_days.add(r.day);
         if (r.day && r.used_copilot_code_review_active) row.review_active_days.add(r.day);
         if (r.day && r.used_copilot_code_review_passive) row.review_passive_days.add(r.day);
+        if (r.day && r.used_copilot_cloud_agent) row.cloud_agent_days.add(r.day);
+        if (r.day && r.used_copilot_coding_agent) row.coding_agent_days.add(r.day);
+        if (r.ai_adoption_phase && typeof r.ai_adoption_phase === 'object') {
+            if (!row._adoption || (r.day && r.day >= row._adoption.day)) {
+                row._adoption = {
+                    phase: r.ai_adoption_phase.phase || 'Unknown',
+                    phase_number: toNum(r.ai_adoption_phase.phase_number),
+                    day: r.day || ''
+                };
+            }
+        }
         if (r.totals_by_model_feature) {
             r.totals_by_model_feature.forEach(mf => {
                 const m = mf.model || 'unknown';
@@ -2353,11 +2486,19 @@ function aggregateUserUsage(data) {
         r.cli_days_count = r.cli_days.size;
         r.review_active_days_count = r.review_active_days.size;
         r.review_passive_days_count = r.review_passive_days.size;
+        r.cloud_agent_days_count = r.cloud_agent_days.size;
+        r.coding_agent_days_count = r.coding_agent_days.size;
+        r.adoption_phase = r._adoption ? r._adoption.phase : '';
         r.top_model = topKey(r.models);
         r.top_language = topKey(r.languages);
         r.top_feature = formatFeatureName(topKey(r.features));
         r.top_ide = topKey(r.ides);
         r.top_chat_mode = formatFeatureName(topKey(r.chat_modes));
+        if (creditsByUser) {
+            const entry = creditsByUser.get((r.user_login || '').toLowerCase());
+            r.ai_credits = entry ? entry.credits : 0;
+            r.ai_credit_cost = entry ? entry.cost : 0;
+        }
         return r;
     });
     return rows;
@@ -2370,48 +2511,78 @@ function topKey(obj) {
     return entries[0][0];
 }
 
+function buildUserUsageColumns() {
+    const meta = window.__dashboardModel && window.__dashboardModel.meta;
+    const hasCredits = Boolean(window.__aiCreditsRaw && window.__aiCreditsRaw.length);
+    const cols = [
+        { key: 'user_login', label: 'User', type: 'text', rowHeader: true },
+        { key: 'interactions', label: 'Interactions', type: 'number' },
+        { key: 'completions', label: 'Completions', type: 'number' },
+        { key: 'acceptances', label: 'Acceptances', type: 'number' },
+        { key: 'acceptance_rate', label: 'Acceptance %', type: 'decimal' },
+        { key: 'days_active_count', label: 'Days Active', type: 'number' },
+        { key: 'chat_days_count', label: 'Chat Days', type: 'number' },
+        { key: 'agent_days_count', label: 'Agent Days', type: 'number' },
+        { key: 'cli_days_count', label: 'CLI Days', type: 'number' },
+        { key: 'review_active_days_count', label: 'Review Active Days', type: 'number' },
+        { key: 'review_passive_days_count', label: 'Review Passive Days', type: 'number' }
+    ];
+    if (meta && meta.hasAdoptionPhase) cols.push({ key: 'adoption_phase', label: 'Adoption Phase', type: 'text' });
+    if (meta && meta.hasCloudAgent) cols.push({ key: 'cloud_agent_days_count', label: 'Cloud Agent Days', type: 'number' });
+    if (meta && meta.hasCodingAgent) cols.push({ key: 'coding_agent_days_count', label: 'Coding Agent Days', type: 'number' });
+    cols.push(
+        { key: 'cli_requests', label: 'CLI Requests', type: 'number' },
+        { key: 'cli_sessions', label: 'CLI Sessions', type: 'number' },
+        { key: 'loc_suggested_add', label: 'LoC Suggested', type: 'number' },
+        { key: 'loc_suggested_delete', label: 'LoC Suggested Del', type: 'number' },
+        { key: 'loc_added', label: 'LoC Added', type: 'number' },
+        { key: 'loc_deleted', label: 'LoC Deleted', type: 'number' }
+    );
+    if (hasCredits) {
+        cols.push(
+            { key: 'ai_credits', label: 'AI Credits', type: 'decimal', render: r => escapeHtml(fmtCredits(r.ai_credits)), csv: r => Number(r.ai_credits || 0).toFixed(2) },
+            { key: 'ai_credit_cost', label: 'AI Credit Cost', type: 'currency', render: r => escapeHtml(fmtCurrency(r.ai_credit_cost)), csv: r => Number(r.ai_credit_cost || 0).toFixed(2) }
+        );
+    }
+    cols.push(
+        { key: 'top_model', label: 'Top Model', type: 'text' },
+        { key: 'top_language', label: 'Top Language', type: 'text' },
+        { key: 'top_feature', label: 'Top Feature', type: 'text' },
+        { key: 'top_ide', label: 'Top IDE', type: 'text' },
+        { key: 'top_chat_mode', label: 'Top Chat Mode', type: 'text' }
+    );
+    return cols;
+}
+
+function renderUserUsageCell(col, r) {
+    if (col.render) return col.render(r);
+    const val = r[col.key];
+    if (col.type === 'decimal') return Number(val || 0).toFixed(1);
+    if (col.type === 'number') return String(val ?? 0);
+    return escapeHtml(val === null || val === undefined ? '' : String(val));
+}
+
 function buildUserUsageTable(data) {
     const table = document.getElementById('userUsageTable');
     if (!table) return;
     const thead = table.querySelector('thead');
     const tbody = table.querySelector('tbody');
-    const rows = aggregateUserUsage(data);
+    const creditsByUser = creditsByUserIndex(filterCreditRows(window.__aiCreditsRaw || [], getActiveFilterState()));
+    const rows = aggregateUserUsage(data, creditsByUser);
     window.__userUsageRows = rows;
+    const columns = buildUserUsageColumns();
+    window.__userUsageColumns = columns;
     const exportBtn = document.getElementById('exportUsersCsvBtn');
     // Build head
     thead.innerHTML = '';
     if (!rows.length) {
         if (exportBtn) exportBtn.disabled = true;
-        tbody.innerHTML = '<tr><td colspan="22">No user-level records are available for the current filters.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${columns.length}">No user-level records are available for the current filters.</td></tr>`;
         return;
     }
     if (exportBtn) exportBtn.disabled = false;
-    const headers = [
-        { key: 'user_login', label: 'User' },
-        { key: 'interactions', label: 'Interactions' },
-        { key: 'completions', label: 'Completions' },
-        { key: 'acceptances', label: 'Acceptances' },
-        { key: 'acceptance_rate', label: 'Acceptance %' },
-        { key: 'days_active_count', label: 'Days Active' },
-        { key: 'chat_days_count', label: 'Chat Days' },
-        { key: 'agent_days_count', label: 'Agent Days' },
-        { key: 'cli_days_count', label: 'CLI Days' },
-        { key: 'review_active_days_count', label: 'Review Active Days' },
-        { key: 'review_passive_days_count', label: 'Review Passive Days' },
-        { key: 'cli_requests', label: 'CLI Requests' },
-        { key: 'cli_sessions', label: 'CLI Sessions' },
-        { key: 'loc_suggested_add', label: 'LoC Suggested' },
-        { key: 'loc_suggested_delete', label: 'LoC Suggested Del' },
-        { key: 'loc_added', label: 'LoC Added' },
-        { key: 'loc_deleted', label: 'LoC Deleted' },
-        { key: 'top_model', label: 'Top Model' },
-        { key: 'top_language', label: 'Top Language' },
-        { key: 'top_feature', label: 'Top Feature' },
-        { key: 'top_ide', label: 'Top IDE' },
-        { key: 'top_chat_mode', label: 'Top Chat Mode' }
-    ];
     const tr = document.createElement('tr');
-    headers.forEach(h => {
+    columns.forEach(h => {
         const th = document.createElement('th');
         th.dataset.key = h.key;
         th.dataset.label = h.label;
@@ -2442,32 +2613,12 @@ function buildUserUsageTable(data) {
         rows.sort((a,b) => {
             const va = a[key]; const vb = b[key];
             if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
-            return String(va).localeCompare(String(vb), undefined, { sensitivity: 'base' }) * dir;
+            return String(va ?? '').localeCompare(String(vb ?? ''), undefined, { sensitivity: 'base' }) * dir;
         });
-        tbody.innerHTML = rows.map(r => `<tr>
-            <th scope="row">${escapeHtml(r.user_login)}</th>
-            <td>${r.interactions}</td>
-            <td>${r.completions}</td>
-            <td>${r.acceptances}</td>
-            <td>${r.acceptance_rate.toFixed(1)}</td>
-            <td>${r.days_active_count}</td>
-            <td>${r.chat_days_count}</td>
-            <td>${r.agent_days_count}</td>
-            <td>${r.cli_days_count}</td>
-            <td>${r.review_active_days_count}</td>
-            <td>${r.review_passive_days_count}</td>
-            <td>${r.cli_requests}</td>
-            <td>${r.cli_sessions}</td>
-            <td>${r.loc_suggested_add}</td>
-            <td>${r.loc_suggested_delete}</td>
-            <td>${r.loc_added}</td>
-            <td>${r.loc_deleted}</td>
-            <td>${escapeHtml(r.top_model)}</td>
-            <td>${escapeHtml(r.top_language)}</td>
-            <td>${escapeHtml(r.top_feature)}</td>
-            <td>${escapeHtml(r.top_ide)}</td>
-            <td>${escapeHtml(r.top_chat_mode)}</td>
-        </tr>`).join('');
+        tbody.innerHTML = rows.map(r => '<tr>' + columns.map(col => {
+            const cell = renderUserUsageCell(col, r);
+            return col.rowHeader ? `<th scope="row">${cell}</th>` : `<td>${cell}</td>`;
+        }).join('') + '</tr>').join('');
         thead.querySelectorAll('th.sortable').forEach(th => {
             const isActive = th.dataset.key === key;
             const label = th.dataset.label || th.dataset.key;
@@ -2488,61 +2639,35 @@ function buildUserUsageTable(data) {
 }
 
 function exportUserUsageCsv() {
-    const rows = window.__userUsageRows || aggregateUserUsage(window.__currentFilteredData || window.__rawData || []);
+    let rows = window.__userUsageRows;
+    let columns = window.__userUsageColumns;
+    if (!rows || !columns) {
+        const creditsByUser = creditsByUserIndex(filterCreditRows(window.__aiCreditsRaw || [], getActiveFilterState()));
+        rows = aggregateUserUsage(window.__currentFilteredData || window.__rawData || [], creditsByUser);
+        columns = buildUserUsageColumns();
+    }
     if (!rows.length) { setStatus('No per-user rows are available to export for the current filters.', true); return; }
-    const header = [
-        'user_login',
-        'user_id',
-        'interactions',
-        'completions',
-        'acceptances',
-        'acceptance_rate',
-        'days_active',
-        'chat_days',
-        'agent_days',
-        'cli_days',
-        'review_active_days',
-        'review_passive_days',
-        'cli_requests',
-        'cli_sessions',
-        'loc_suggested_add',
-        'loc_suggested_delete',
-        'loc_added',
-        'loc_deleted',
-        'top_model',
-        'top_language',
-        'top_feature',
-        'top_ide',
-        'top_chat_mode'
-    ];
-    const lines = [header.join(',')];
+    const csvValue = (col, r) => {
+        if (col.csv) return col.csv(r);
+        const val = r[col.key];
+        if (col.type === 'decimal') return Number(val || 0).toFixed(2);
+        if (col.type === 'number') return val ?? 0;
+        return val ?? '';
+    };
+    // Include user_id right after the user column for traceability.
+    const header = [];
+    columns.forEach(col => {
+        header.push(col.key);
+        if (col.key === 'user_login') header.push('user_id');
+    });
+    const lines = [header.map(csvEscape).join(',')];
     rows.forEach(r => {
-        const vals = [
-            r.user_login,
-            r.user_id,
-            r.interactions,
-            r.completions,
-            r.acceptances,
-            r.acceptance_rate.toFixed(2),
-            r.days_active_count,
-            r.chat_days_count,
-            r.agent_days_count,
-            r.cli_days_count,
-            r.review_active_days_count,
-            r.review_passive_days_count,
-            r.cli_requests,
-            r.cli_sessions,
-            r.loc_suggested_add,
-            r.loc_suggested_delete,
-            r.loc_added,
-            r.loc_deleted,
-            r.top_model,
-            r.top_language,
-            r.top_feature,
-            r.top_ide,
-            r.top_chat_mode
-        ].map(v => csvEscape(v));
-        lines.push(vals.join(','));
+        const vals = [];
+        columns.forEach(col => {
+            vals.push(csvValue(col, r));
+            if (col.key === 'user_login') vals.push(r.user_id);
+        });
+        lines.push(vals.map(csvEscape).join(','));
     });
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -2558,4 +2683,355 @@ function csvEscape(val) {
     const s = String(val);
     if (/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
     return s;
+}
+
+// ================= AI Credits (premium request) report ================= //
+
+// Minimal RFC-4180 CSV parser: returns an array of string[] rows.
+function parseCsv(text) {
+    if (typeof text !== 'string') return [];
+    // Strip UTF-8 BOM if present.
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                if (text[i + 1] === '"') { field += '"'; i++; }
+                else inQuotes = false;
+            } else {
+                field += ch;
+            }
+            continue;
+        }
+        if (ch === '"') { inQuotes = true; continue; }
+        if (ch === ',') { row.push(field); field = ''; continue; }
+        if (ch === '\r') { continue; }
+        if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; continue; }
+        field += ch;
+    }
+    // Flush trailing field/row.
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+}
+
+const AI_CREDITS_NUMERIC_FIELDS = new Set([
+    'quantity',
+    'applied_cost_per_quantity',
+    'gross_amount',
+    'discount_amount',
+    'net_amount',
+    'total_monthly_quota',
+    'aic_quantity',
+    'aic_gross_amount'
+]);
+
+function parseAiCreditsCsv(text) {
+    const rows = parseCsv(text).filter(r => r.some(cell => (cell || '').trim() !== ''));
+    if (rows.length < 2) throw new Error('The CSV appears to be empty or has no data rows.');
+    const header = rows[0].map(h => (h || '').trim().toLowerCase());
+    const required = ['date', 'model', 'quantity', 'net_amount', 'unit_type'];
+    const missing = required.filter(col => !header.includes(col));
+    if (missing.length) {
+        throw new Error(`Missing expected column(s): ${missing.join(', ')}. This does not look like an AI Credits usage report.`);
+    }
+    const out = [];
+    for (let i = 1; i < rows.length; i++) {
+        const cells = rows[i];
+        const obj = {};
+        header.forEach((name, idx) => {
+            if (!name) return;
+            const raw = (cells[idx] ?? '').trim();
+            obj[name] = AI_CREDITS_NUMERIC_FIELDS.has(name) ? toNum(raw) : raw;
+        });
+        const model = obj.model || 'unknown';
+        obj.is_auto = /^auto:/i.test(model);
+        obj.base_model = model.replace(/^auto:\s*/i, '').trim() || model;
+        out.push(obj);
+    }
+    return out;
+}
+
+function fmtCurrency(value) {
+    return '$' + Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtCredits(value) {
+    return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+function getActiveFilterState() {
+    return {
+        search: (document.getElementById('userSearch')?.value || '').trim().toLowerCase(),
+        from: document.getElementById('dateFrom')?.value || '',
+        to: document.getElementById('dateTo')?.value || '',
+        membersOnly: !!document.getElementById('membersOnlyChk')?.checked
+    };
+}
+
+function filterCreditRows(rows, state) {
+    let filtered = rows || [];
+    if (!filtered.length) return filtered;
+    const s = state || getActiveFilterState();
+    if (s.search) filtered = filtered.filter(r => (r.username || '').toLowerCase().includes(s.search));
+    if (s.from) filtered = filtered.filter(r => !r.date || r.date >= s.from);
+    if (s.to) filtered = filtered.filter(r => !r.date || r.date <= s.to);
+    if (s.membersOnly && window.__membersSet) {
+        filtered = filtered.filter(r => window.__membersSet.has((r.username || '').toLowerCase()));
+    }
+    return filtered;
+}
+
+function creditsByUserIndex(rows) {
+    const map = new Map();
+    (rows || []).forEach(r => {
+        const login = (r.username || '').trim();
+        if (!login) return;
+        const key = login.toLowerCase();
+        const entry = map.get(key) || { login, credits: 0, cost: 0 };
+        entry.credits += toNum(r.quantity);
+        entry.cost += toNum(r.net_amount);
+        map.set(key, entry);
+    });
+    return map;
+}
+
+function buildCreditsModel(rows) {
+    if (!rows || !rows.length) return null;
+    const groupSum = keyFn => {
+        const m = new Map();
+        rows.forEach(r => {
+            const key = keyFn(r);
+            const g = m.get(key) || { key, credits: 0, net_cost: 0, gross_cost: 0 };
+            g.credits += toNum(r.quantity);
+            g.net_cost += toNum(r.net_amount);
+            g.gross_cost += toNum(r.gross_amount);
+            m.set(key, g);
+        });
+        return m;
+    };
+
+    let credits = 0, netCost = 0, grossCost = 0, discount = 0, aicCredits = 0, aicGross = 0, monthlyQuota = 0;
+    let autoCredits = 0, manualCredits = 0, autoCost = 0, manualCost = 0;
+    const userSet = new Set();
+    const orgSet = new Set();
+    rows.forEach(r => {
+        credits += toNum(r.quantity);
+        netCost += toNum(r.net_amount);
+        grossCost += toNum(r.gross_amount);
+        discount += toNum(r.discount_amount);
+        aicCredits += toNum(r.aic_quantity);
+        aicGross += toNum(r.aic_gross_amount);
+        monthlyQuota = Math.max(monthlyQuota, toNum(r.total_monthly_quota));
+        if (r.username) userSet.add(r.username.toLowerCase());
+        if (r.organization) orgSet.add(r.organization);
+        if (r.is_auto) { autoCredits += toNum(r.quantity); autoCost += toNum(r.net_amount); }
+        else { manualCredits += toNum(r.quantity); manualCost += toNum(r.net_amount); }
+    });
+
+    const byCreditsDesc = (a, b) => b.credits - a.credits;
+    const withShare = list => list.map(row => ({ ...row, share: credits ? (row.credits / credits) * 100 : 0 }));
+    const byModel = withShare(Array.from(groupSum(r => r.model || 'unknown').values()).sort(byCreditsDesc));
+    const byUser = Array.from(groupSum(r => r.username || '(unattributed)').values()).sort(byCreditsDesc);
+    const byOrg = Array.from(groupSum(r => r.organization || '(none)').values()).sort(byCreditsDesc);
+    const byCostCenter = Array.from(groupSum(r => r.cost_center_name || '(none)').values()).sort(byCreditsDesc);
+    const byRepo = Array.from(groupSum(r => r.repository || '(none)').values()).sort(byCreditsDesc);
+    const byDay = Array.from(groupSum(r => r.date || '').values())
+        .filter(row => row.key)
+        .sort((a, b) => a.key.localeCompare(b.key));
+
+    const users = userSet.size;
+    const avgCreditsPerUser = users ? credits / users : 0;
+    const quotaPct = monthlyQuota ? (avgCreditsPerUser / monthlyQuota) * 100 : 0;
+
+    return {
+        rows,
+        totals: {
+            credits, netCost, grossCost, discount, aicCredits, aicGross,
+            monthlyQuota, users, models: byModel.length, orgs: orgSet.size,
+            avgCreditsPerUser, quotaPct,
+            topModel: byModel[0]?.key || 'n/a',
+            autoCredits, manualCredits, autoCost, manualCost
+        },
+        breakdowns: { byModel, byUser, byOrg, byCostCenter, byRepo, byDay }
+    };
+}
+
+function renderAiCreditsSection(cm) {
+    const section = document.getElementById('creditsSection');
+    const metricsEl = document.getElementById('creditsMetrics');
+    const chartsEl = document.getElementById('creditsCharts');
+    const tablesEl = document.getElementById('creditsTables');
+    if (!section || !metricsEl || !chartsEl || !tablesEl) return;
+
+    if (!cm || !cm.rows.length) {
+        window.__hasCredits = false;
+        section.hidden = true;
+        metricsEl.innerHTML = '';
+        chartsEl.innerHTML = '';
+        tablesEl.innerHTML = '';
+        return;
+    }
+
+    window.__hasCredits = true;
+    section.hidden = false;
+    const t = cm.totals;
+
+    const cards = [
+        { label: 'Total AI Credits', value: fmtCredits(t.credits) },
+        { label: 'Total Cost (Net)', value: fmtCurrency(t.netCost) },
+        { label: 'Gross Cost', value: fmtCurrency(t.grossCost) }
+    ];
+    if (t.discount > 0) cards.push({ label: 'Discounts', value: fmtCurrency(t.discount) });
+    cards.push(
+        { label: 'Users with Spend', value: t.users.toLocaleString() },
+        { label: 'Avg Credits / User', value: fmtCredits(t.avgCreditsPerUser) },
+        { label: 'Most Expensive Model', value: t.topModel }
+    );
+    if (t.monthlyQuota > 0) {
+        cards.push(
+            { label: 'Monthly Quota / User', value: fmtCredits(t.monthlyQuota) },
+            { label: 'Avg vs Monthly Quota %', value: t.quotaPct.toFixed(1) }
+        );
+    }
+    if (t.aicCredits > 0) {
+        cards.push(
+            { label: 'Additional (Overage) Credits', value: fmtCredits(t.aicCredits) },
+            { label: 'Overage Cost', value: fmtCurrency(t.aicGross) }
+        );
+    }
+    const note = `<div class="small-note" style="grid-column:1 / -1; margin-top:8px;">1 AI credit = $0.01. Monthly quota is per user; "Avg vs Monthly Quota %" is scoped to the selected date range. Rows without a username (repository- or agent-scoped usage) are included in totals but not in the per-user table.</div>`;
+    metricsEl.innerHTML = cards.map(c => metricCard(c.label, c.value)).join('') + note;
+
+    // Charts
+    chartsEl.innerHTML = '';
+    const topModels = cm.breakdowns.byModel.slice(0, 8);
+    if (topModels.length) {
+        createChart('AI Credits by Model', 'doughnut', topModels.map(r => r.key), topModels.map(r => +r.credits.toFixed(2)), chartsEl);
+    }
+    if (cm.breakdowns.byDay.length) {
+        createStackedChart('AI Credits per Day', cm.breakdowns.byDay.map(r => r.key), [
+            { name: 'AI Credits', data: cm.breakdowns.byDay.map(r => +r.credits.toFixed(2)) }
+        ], 'area', 'normal', chartsEl);
+        createStackedChart('Daily Net Cost ($)', cm.breakdowns.byDay.map(r => r.key), [
+            { name: 'Net cost', data: cm.breakdowns.byDay.map(r => +r.net_cost.toFixed(2)) }
+        ], 'area', 'normal', chartsEl);
+    }
+    const topUsers = cm.breakdowns.byUser.filter(r => r.key !== '(unattributed)').slice(0, 10);
+    if (topUsers.length) {
+        createChart('Top Users by AI Credits', 'bar', topUsers.map(r => r.key), topUsers.map(r => +r.credits.toFixed(2)), chartsEl);
+    }
+    const orgs = cm.breakdowns.byOrg.filter(r => r.key !== '(none)');
+    if (orgs.length > 1) {
+        createChart('AI Credits by Organization', 'column', orgs.slice(0, 12).map(r => r.key), orgs.slice(0, 12).map(r => +r.credits.toFixed(2)), chartsEl);
+    }
+    const costCenters = cm.breakdowns.byCostCenter.filter(r => r.key !== '(none)');
+    if (costCenters.length) {
+        createChart('AI Credits by Cost Center', 'column', costCenters.slice(0, 12).map(r => r.key), costCenters.slice(0, 12).map(r => +r.credits.toFixed(2)), chartsEl);
+    }
+    if (t.autoCredits > 0 && t.manualCredits > 0) {
+        createChart('Auto vs Manual Model Credits', 'pie', ['Auto-selected', 'Manually selected'], [+t.autoCredits.toFixed(2), +t.manualCredits.toFixed(2)], chartsEl);
+    }
+
+    // Tables
+    const currencyCol = (key, label) => ({ key, label, render: value => escapeHtml(fmtCurrency(value)) });
+    const creditsCol = { key: 'credits', label: 'Credits', render: value => escapeHtml(fmtCredits(value)) };
+    const blocks = [];
+    blocks.push(renderTableBlock(
+        'AI credits by model',
+        'Premium request credits and cost grouped by model (auto-selected models keep their "Auto:" label).',
+        [
+            { key: 'key', label: 'Model' },
+            creditsCol,
+            currencyCol('net_cost', 'Net cost'),
+            currencyCol('gross_cost', 'Gross cost'),
+            { key: 'share', label: 'Share %', type: 'decimal' }
+        ],
+        cm.breakdowns.byModel,
+        true
+    ));
+    if (cm.breakdowns.byUser.length) {
+        blocks.push(renderTableBlock(
+            'AI credits by user',
+            'Credits and cost grouped by username. Rows without a username are grouped as "(unattributed)".',
+            [{ key: 'key', label: 'User' }, creditsCol, currencyCol('net_cost', 'Net cost')],
+            cm.breakdowns.byUser
+        ));
+    }
+    const orgRows = cm.breakdowns.byOrg;
+    if (orgRows.length) {
+        blocks.push(renderTableBlock(
+            'AI credits by organization',
+            'Credits and cost grouped by organization.',
+            [{ key: 'key', label: 'Organization' }, creditsCol, currencyCol('net_cost', 'Net cost')],
+            orgRows
+        ));
+    }
+    if (costCenters.length) {
+        blocks.push(renderTableBlock(
+            'AI credits by cost center',
+            'Credits and cost grouped by cost center (only rows with a cost center are shown).',
+            [{ key: 'key', label: 'Cost center' }, creditsCol, currencyCol('net_cost', 'Net cost')],
+            costCenters
+        ));
+    }
+    tablesEl.innerHTML = blocks.join('');
+
+    enableDownloadButton();
+}
+
+function updateCreditsView() {
+    const raw = window.__aiCreditsRaw;
+    if (!raw || !raw.length) { renderAiCreditsSection(null); return; }
+    const filtered = filterCreditRows(raw, getActiveFilterState());
+    renderAiCreditsSection(buildCreditsModel(filtered));
+}
+
+function refreshDateBoundsUnion() {
+    const creditDates = (window.__aiCreditsRaw || []).map(r => r.date).filter(Boolean);
+    const metricDays = window.__allDays || [];
+    const all = Array.from(new Set([...metricDays, ...creditDates])).filter(Boolean).sort();
+    if (!all.length) return;
+    window.__allDays = all;
+    const min = all[0];
+    const max = all[all.length - 1];
+    const from = document.getElementById('dateFrom');
+    const to = document.getElementById('dateTo');
+    // Widen the active range so newly added credit dates outside the current
+    // metrics window are not silently filtered out (never narrows the range).
+    if (from) { from.min = min; from.max = max; if (!from.value || from.value > min) from.value = min; }
+    if (to) { to.min = min; to.max = max; if (!to.value || to.value < max) to.value = max; }
+    setupQuickRangeButtons();
+}
+
+function handleAiCreditsFile(file) {
+    if (!file) { setStatus('No AI Credits file selected. Please choose a CSV export.'); return; }
+    showLoading(true);
+    setStatus(`Reading ${file.name} …`);
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            const rows = parseAiCreditsCsv(e.target.result);
+            if (!rows.length) throw new Error('No AI credit rows found in the file.');
+            window.__aiCreditsRaw = rows;
+            if (window.__rawData && window.__rawData.length) {
+                refreshDateBoundsUnion();
+                applyFilters();
+            } else {
+                initializeFilters(rows.map(r => ({ day: r.date })));
+                analyzeData([]);
+            }
+            setStatus(`Loaded ${rows.length} AI credit rows from ${file.name}. Cost views updated.`);
+        } catch (err) {
+            console.error(err);
+            setStatus(`AI Credits parse error: ${err.message}`, true);
+        } finally {
+            showLoading(false);
+        }
+    };
+    reader.onerror = () => { setStatus('AI Credits file read error', true); showLoading(false); };
+    reader.readAsText(file);
 }
