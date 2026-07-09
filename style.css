@@ -926,6 +926,17 @@ button.secondary:hover:not(:disabled),
     color: var(--accent-strong);
 }
 
+button.secondary.danger-action {
+    border-color: color-mix(in srgb, var(--danger) 34%, var(--panel-border-strong));
+    color: var(--danger);
+}
+
+button.secondary.danger-action:hover:not(:disabled) {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
 button:disabled {
     cursor: not-allowed;
     opacity: 0.52;

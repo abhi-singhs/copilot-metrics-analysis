@@ -303,6 +303,11 @@ document.addEventListener('DOMContentLoaded', () => {
         exportUsersCsvBtn.addEventListener('click', () => exportUserUsageCsv());
     }
 
+    const clearDataBtn = document.getElementById('clearDataBtn');
+    if (clearDataBtn) {
+        clearDataBtn.addEventListener('click', () => clearAllData());
+    }
+
     initializeHeaderHeightVar();
     initializeSectionNav();
     initializeBackToTop();
@@ -660,6 +665,7 @@ function analyzeData(data) {
         if (downloadBtn) downloadBtn.disabled = true;
         const userUsageBtn = document.getElementById('userUsageBtn');
         if (userUsageBtn) userUsageBtn.disabled = true;
+        updateClearButtonState();
         updateCreditsView();
         return;
     }
@@ -673,6 +679,7 @@ function analyzeData(data) {
     renderReferenceTables(model);
     updateCreditsView();
     enableDownloadButton();
+    updateClearButtonState();
 
     const userUsageBtn = document.getElementById('userUsageBtn');
     if (userUsageBtn) userUsageBtn.disabled = !model.meta.hasUserRecords;
@@ -2086,6 +2093,80 @@ function enableDownloadButton() {
     if (btn) btn.disabled = false;
     const uBtn = document.getElementById('userUsageBtn');
     if (uBtn) uBtn.disabled = !(window.__dashboardModel && window.__dashboardModel.meta.hasUserRecords);
+}
+
+function updateClearButtonState() {
+    const btn = document.getElementById('clearDataBtn');
+    if (!btn) return;
+    const hasMetrics = Boolean(window.__rawData && window.__rawData.length);
+    const hasCredits = Boolean(window.__aiCreditsRaw && window.__aiCreditsRaw.length);
+    btn.disabled = !(hasMetrics || hasCredits);
+}
+
+function clearAllData() {
+    // Drop loaded datasets and any derived state.
+    window.__rawData = null;
+    window.__sourceData = null;
+    window.__aiCreditsRaw = null;
+    window.__currentFilteredData = null;
+    window.__dashboardModel = null;
+    window.__membersSet = null;
+    window.__allDays = [];
+    window.__hasCredits = false;
+
+    // Reset the file inputs and their displayed names.
+    ['jsonFileInput', 'aiCreditsFileInput', 'membersFileInput'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = '';
+    });
+    syncSelectedFileName(document.getElementById('jsonFileInput'), 'jsonFileName');
+    syncSelectedFileName(document.getElementById('aiCreditsFileInput'), 'aiCreditsFileName');
+
+    // Reset filter controls back to their empty defaults.
+    const search = document.getElementById('userSearch');
+    if (search) search.value = '';
+    ['dateFrom', 'dateTo'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.value = ''; el.removeAttribute('min'); el.removeAttribute('max'); }
+    });
+    document.querySelectorAll('.range-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+    });
+    updateMembersStatus();
+
+    // Return to the dashboard view and clear rendered content.
+    const userUsageSection = document.getElementById('userUsageSection');
+    if (userUsageSection) userUsageSection.hidden = true;
+    const chartsSection = document.getElementById('chartsSection');
+    if (chartsSection) chartsSection.hidden = false;
+    const userTable = document.getElementById('userUsageTable');
+    if (userTable) {
+        const thead = userTable.querySelector('thead');
+        const tbody = userTable.querySelector('tbody');
+        if (thead) thead.innerHTML = '';
+        if (tbody) tbody.innerHTML = '';
+    }
+    const tablesContainer = document.getElementById('tablesContainer');
+    if (tablesContainer) tablesContainer.innerHTML = '';
+    const tablesSection = document.getElementById('tablesSection');
+    if (tablesSection) tablesSection.hidden = true;
+    updateCreditsView(); // no credits -> hides and clears the cost section
+
+    // Disable the data-dependent actions.
+    ['applyFiltersBtn', 'downloadPdfBtn', 'userUsageBtn', 'exportUsersCsvBtn', 'clearDataBtn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = true;
+    });
+
+    // Restore the initial empty state.
+    renderPlaceholders('upload');
+    setStatus('Cleared all loaded data. Upload a JSON or JSON Lines file to populate the dashboard.');
+
+    // Send the user back to the top and refocus the metrics file picker.
+    window.scrollTo({ top: 0, left: 0, behavior: preferredScrollBehavior() });
+    const trigger = document.getElementById('jsonFileTrigger');
+    if (trigger) trigger.focus();
 }
 
 function escapeHtml(str) {
