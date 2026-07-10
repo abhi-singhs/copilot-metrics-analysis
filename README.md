@@ -8,9 +8,9 @@ The dashboard now handles both:
 * **User-level records** (for per-user analysis, user flags, and CSV export)
 * **Aggregate day totals** from enterprise/org reports (including `day_totals`, CLI metrics, pull request activity, and monthly/daily active user fields)
 
-It is aligned to the latest usage-metrics schema, including per-user **AI adoption phase** (`ai_adoption_phase`), **Copilot cloud agent** (`used_copilot_cloud_agent`), and **Copilot coding agent** (`used_copilot_coding_agent`) signals.
+It is aligned to the latest usage-metrics schema, including per-user **AI Credits used** (`ai_credits_used`), **AI adoption phase** (`ai_adoption_phase`), **Copilot cloud agent** (`used_copilot_cloud_agent`), and **Copilot coding agent** (`used_copilot_coding_agent`) signals.
 
-It also supports an optional **AI Credits usage report (CSV)** upload — the premium-request / AI-credit billing export — which adds a dedicated **"AI Credits & cost"** dashboard section and merges credit spend into the per-user table. All credit views respect the same date, user-search, and members-only filters. 1 AI credit = $0.01.
+It also supports an optional **AI Credits usage report (CSV)** upload — the premium-request / AI-credit billing export — which adds a dedicated **"AI Credits & cost"** dashboard section and merges billed credits and cost into the per-user table. All credit views respect the same date, user-search, and members-only filters. 1 AI credit = $0.01.
 
 ### Quick Start Options
 
@@ -26,6 +26,9 @@ It also supports an optional **AI Credits usage report (CSV)** upload — the pr
 2. Open the dashboard and select "Upload File" mode  
 3. Upload your JSON/JSONL export file
 4. Optionally upload organization members file
+
+#### Bundled sample data
+Upload [`sample-data.json`](sample-data.json) to explore the dashboard without using a real metrics export. It contains exactly **1,000 synthetic user-day records**: 100 fictional users across 10 days, with varied usage personas, inactive days, multi-feature/model/language activity, AI Credit outliers, CLI and agent workflows, pull requests, code review signals, evolving adoption phases, and LoC metrics. It contains no real user or organization data.
 
 ---
 
@@ -104,10 +107,10 @@ Screenshots:
 * Reset: clears search, date edits, quick‑range selection, and members‑only filter, restoring the full dataset.
 
 ### 5. Explore the metrics
-Summary cards now reflect the latest Copilot usage metrics reference, including active-user rollups, chat usage, LoC changed with AI, agent contribution, CLI usage, code review activity, and pull request totals when present in the export.
+Summary cards now reflect the latest Copilot usage metrics reference, including active-user rollups, chat usage, AI Credits used, LoC changed with AI, agent contribution, CLI usage, code review activity, and pull request totals when present in the export.
 
 Below them, the dashboard renders updated chart groups for:
-* Adoption, usage, and chat modes (including **AI adoption phase distribution**)
+* Adoption, usage, AI Credits used per day, and chat modes (including **AI adoption phase distribution**)
 * Model usage (overall, per day, per chat mode, per language)
 * Language usage (overall and per day)
 * IDE distribution
@@ -115,24 +118,28 @@ Below them, the dashboard renders updated chart groups for:
 * Code generation views: LoC suggested vs changed, daily added/deleted lines, and user-initiated vs agent-initiated changes
 * Pull request and Copilot review suggestion activity
 
-When they are present in the export, the summary cards also surface **Coding Agent Users**, **Cloud Agent Users**, and the **Top Adoption Phase**.
+When they are present in the export, the summary cards also surface **AI Credits Used**, **Coding Agent Users**, **Cloud Agent Users**, and the **Top Adoption Phase**. User-level exports also add a **Top Users by AI Credits Used** chart.
 
 #### AI Credits & cost (optional)
-Upload the **AI Credits usage report** CSV in the controls (the "AI Credits usage report" file picker) to unlock a dedicated **AI Credits & cost** section. It shows:
+Enable **Show AI Credits usage report upload** in the controls, then upload the billing CSV to unlock a dedicated **AI Credits & cost** section. It shows:
 * Cards for total AI credits, net/gross cost, discounts, users with spend, average credits per user, most expensive model, per-user monthly quota, and overage (when present).
 * Charts for credits by model, credits and net cost per day, top users by credits, credits by organization / cost center, and auto- vs manually-selected model credits.
 * Tables for credits by model, user, organization, and cost center.
 
 The report can be loaded on its own (cost-only) or alongside a metrics export. When both are loaded, credit spend is merged into the per-user table (see below). The CSV must include at least `date`, `model`, `quantity`, `net_amount`, and `unit_type` columns; models prefixed with `Auto:` are treated as auto-selected.
 
+The `ai_credits_used` value in the metrics JSON is handled independently and does not require the billing CSV. It appears in key metrics, the daily overview and chart, and per-user analysis. When both sources are loaded, the user table distinguishes **AI Credits Used** from the metrics export and **Billed AI Credits** / **AI Credit Cost** from the billing report.
+
 #### Reference tables
 The **Reference tables** section mirrors the newer schema with sortable-by-filter tables for:
-* Daily overview values
+* Daily overview values, including AI Credits used when available
 * Feature, language, model, and IDE breakdowns
 * AI adoption phases
 * CLI activity
 * Code review activity
 * Pull request lifecycle activity
+
+The **AI adoption phases** table includes the v1 meaning for each cohort. Phase classification is based on Copilot surfaces used on at least two days in a rolling 28-day window: **Phase 0 — No cohort**, **Phase 1 — Code first**, **Phase 2 — Agent first**, and **Phase 3 — Multi-agent**.
 
 #### Per-user detail & CSV export
 Click the **User Usage Table** button (enabled when user-level records are present) to view a sortable table of aggregated metrics per user. It now includes:
@@ -141,7 +148,8 @@ Click the **User Usage Table** button (enabled when user-level records are prese
 * Adoption phase, cloud agent days, and coding agent days (when those fields are present)
 * CLI requests / sessions
 * LoC Suggested (add/delete), LoC Added, LoC Deleted
-* **AI Credits** and **AI Credit Cost** per user (when an AI Credits report is loaded)
+* **AI Credits Used** per user (when `ai_credits_used` is present in the metrics export)
+* **Billed AI Credits** and **AI Credit Cost** per user (when an AI Credits report is loaded alongside embedded usage data)
 * Top model, language, feature, IDE, and chat mode
 
 You can:
@@ -154,7 +162,7 @@ Hover any chart element for tooltips. Categories auto‑trim if extremely long t
 
 ### 6. Generate a PDF report
 1. (Optional) Enter Enterprise Name and/or Organization Name (for labeling only; not used for API fetch now).
-2. Click “Download PDF” after data loads. A multi‑page PDF (summary grid + each chart) is generated entirely in your browser. When an AI Credits report is loaded, the credit cost cards and charts are included too.
+2. Click “Download PDF” after data loads. A multi‑page PDF (summary grid + each chart) is generated entirely in your browser. Embedded AI Credits usage and, when an AI Credits report is loaded, credit cost cards and charts are included too.
 3. Reference tables and the per-user CSV export are kept in the web view; they are not embedded in the PDF.
 
 ### 7. Privacy & local‑only behavior
@@ -171,16 +179,17 @@ Hover any chart element for tooltips. Categories auto‑trim if extremely long t
 | Members only disabled | Upload a members file with objects containing a login field. |
 | Date inputs empty or disabled | Ensure records or `day_totals` entries contain a `day` field (YYYY-MM-DD). |
 | PDF button disabled | Load a metrics file (or an AI Credits report) first; button enables after successful parsing. |
-| AI Credits section not showing | Upload the AI Credits usage report via the "AI Credits usage report" file picker. The CSV must include `date`, `model`, `quantity`, `net_amount`, and `unit_type` columns. |
+| AI Credits Used missing from the main dashboard | Ensure the metrics records contain a numeric `ai_credits_used` field. The optional billing CSV populates the separate cost section instead. |
+| AI Credits section not showing | Enable "Show AI Credits usage report upload", then choose the billing CSV. It must include `date`, `model`, `quantity`, `net_amount`, and `unit_type` columns. |
 | "Missing expected column(s)" on AI Credits upload | The file isn't the AI Credits usage report, or its header row was altered. Re-export the premium-request / AI-credit usage CSV and upload it unmodified. |
-| AI Credit columns missing from per-user table | Load both a metrics export and an AI Credits report; credits merge onto users by matching `username` to the login (case-insensitive). Rows without a username stay in totals but not per-user. |
+| Billed AI Credit columns missing from per-user table | Load both a metrics export and an AI Credits report; billed credits merge onto users by matching `username` to the login (case-insensitive). Rows without a username stay in totals but not per-user. |
 
 ### 9. Suggested workflow
 1. Download latest enterprise metrics export from GitHub.
 2. (Optional) Download members list from GitHub Organisation Members page.
 3. Open dashboard locally and load metrics file.
 4. Apply date + user filters to focus on adoption windows (e.g., last 28 days).
-5. Review acceptance, agent adoption %, active-user rollups, and most used chat model.
+5. Review acceptance, agent adoption %, active-user rollups, AI Credits usage, and most used chat model.
 6. Review LoC metrics: suggested vs changed, user-initiated vs agent-initiated edits, and language/model breakdowns.
 7. If present in the export, review CLI activity, code review activity, and pull request metrics.
 8. (Optional) Upload the AI Credits usage report CSV to review credit spend and cost, and to see per-user cost in the user table.

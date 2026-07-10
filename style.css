@@ -1357,6 +1357,15 @@ button:disabled {
     white-space: nowrap;
 }
 
+.table-cell-description {
+    display: block;
+    min-width: 16rem;
+    max-width: 30rem;
+    white-space: normal;
+    text-align: left;
+    line-height: 1.4;
+}
+
 .usage-table thead th:first-child {
     left: 0;
     z-index: 4;
@@ -1368,24 +1377,26 @@ button:disabled {
     text-align: left;
 }
 
+.usage-table tbody tr {
+    --table-row-bg: var(--panel);
+    background: var(--table-row-bg);
+}
+
 .usage-table tbody tr:nth-child(even) {
-    background: color-mix(in srgb, var(--panel-subtle) 55%, var(--panel) 45%);
+    --table-row-bg: color-mix(in srgb, var(--panel-subtle) 55%, var(--panel) 45%);
 }
 
 .usage-table tbody tr:hover {
-    background: var(--table-row-hover);
+    --table-row-bg: var(--table-row-hover);
 }
 
 .usage-table tbody th[scope="row"] {
     position: sticky;
     left: 0;
     z-index: 2;
-    background: inherit;
+    background: var(--table-row-bg);
+    box-shadow: 1px 0 0 var(--panel-border);
     font-weight: 700;
-}
-
-.usage-table tbody tr:hover th[scope="row"] {
-    background: var(--table-row-hover);
 }
 
 .usage-table th.sortable {
