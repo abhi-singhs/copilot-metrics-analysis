@@ -15,7 +15,7 @@
     </script>
     <title>GitHub Copilot Metrics Analyzer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f6f8fa'/%3E%3Cpath d='M8 22h4V14H8zm6 0h4V10h-4zm6 0h4V17h-4z' fill='%230969da'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="style.css?v=20260709-primer-icons-8" />
+    <link rel="stylesheet" href="style.css?v=20260710-phase-meanings" />
 </head>
 <body>
     <svg class="octicon-sprite" aria-hidden="true" focusable="false">
@@ -120,7 +120,13 @@
                                 <input type="file" id="jsonFileInput" class="visually-hidden-file" accept=".json,.jsonl,.ndjson,.txt,application/json" aria-describedby="metricsFileHelp" required />
                                 <div id="metricsFileHelp" class="assist-text">JSON or JSON Lines export.</div>
                             </div>
-                            <div class="control-item file-picker toolbar-item toolbar-item-wide" id="aiCreditsFileWrap">
+                            <div class="control-item toolbar-item toolbar-item-wide toolbar-toggle">
+                                <label class="inline-checkbox" for="aiCreditsReportToggle">
+                                    <input type="checkbox" id="aiCreditsReportToggle" aria-controls="aiCreditsFileWrap" aria-expanded="false" />
+                                    <span>Show AI Credits usage report upload <span class="optional">(optional)</span></span>
+                                </label>
+                            </div>
+                            <div class="control-item file-picker toolbar-item toolbar-item-wide" id="aiCreditsFileWrap" hidden>
                                 <label for="aiCreditsFileInput">AI Credits usage report <span class="optional">(optional)</span></label>
                                 <div class="upload-inline">
                                     <button type="button" id="aiCreditsFileTrigger" class="file-upload-trigger"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-upload"></use></svg>Choose file</button>
@@ -234,7 +240,7 @@
                 <div>
                     <p class="section-kicker">Overview</p>
                     <h2 id="summaryHeading" class="panel-title"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Key metrics</h2>
-                    <p class="panel-intro">The most important adoption, interaction, and code generation signals from the current filter set appear here first.</p>
+                    <p class="panel-intro">The most important adoption, interaction, AI Credits usage, and code generation signals from the current filter set appear here first.</p>
                 </div>
             </div>
             <div id="summaryMetrics" class="metrics-grid" aria-live="polite"></div>
@@ -245,7 +251,7 @@
                 <div>
                     <p class="section-kicker">Analysis</p>
                     <h2 id="chartsHeading" class="panel-title"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Charts and visual breakdowns</h2>
-                    <p class="panel-intro">These charts group related adoption, usage, model, language, and code generation trends based on the current filters.</p>
+                    <p class="panel-intro">These charts group related adoption, AI Credits usage, model, language, and code generation trends based on the current filters.</p>
                 </div>
             </div>
             <div id="chartsContainer" class="charts-grid" aria-live="polite"></div>
@@ -286,7 +292,7 @@
                     <button type="button" id="backToDashboardBtn" class="secondary" aria-label="Return to charts dashboard"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Back to overview</button>
                 </div>
             </div>
-            <p class="small-note" id="userUsageNote">Aggregated user-level metrics based on the current filters, including activity flags, CLI usage, and richer LoC totals when the export contains user records. Use the column buttons to sort the table.</p>
+            <p class="small-note" id="userUsageNote">Aggregated user-level metrics based on the current filters, including AI Credits used, activity flags, CLI usage, and richer LoC totals when the export contains user records. Use the column buttons to sort the table.</p>
             <div class="user-table-wrapper" tabindex="0">
                 <table id="userUsageTable" class="usage-table" aria-describedby="userUsageNote">
                     <thead></thead>
@@ -302,7 +308,7 @@
     </div>
 
     <footer class="app-footer small-note">
-        <span>Aligned to the current GitHub Copilot usage metrics schema, including AI adoption phase, cloud/coding agent usage, and optional AI Credits cost reporting. Everything is processed locally in your browser.</span>
+        <span>Aligned to the current GitHub Copilot usage metrics schema, including AI Credits used, AI adoption phase, cloud/coding agent usage, and optional AI Credits cost reporting. Everything is processed locally in your browser.</span>
     </footer>
 
     <button type="button" id="backToTopBtn" class="back-to-top" aria-label="Back to top" title="Back to top">
@@ -320,6 +326,6 @@
     <!-- Libraries for enhanced PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/3.0.2/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="script.js?v=20260709-primer"></script>
+    <script src="script.js?v=20260710-phase-meanings"></script>
 </body>
 </html>

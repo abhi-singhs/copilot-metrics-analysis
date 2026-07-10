@@ -29,6 +29,13 @@ const CHAT_MODE_FEATURES = [
     'chat_panel_unknown_mode'
 ];
 
+const AI_ADOPTION_PHASE_MEANINGS_V1 = Object.freeze({
+    0: 'No cohort — Did not meet the engagement criteria for another phase.',
+    1: 'Code first — Used code completion and/or IDE agent mode.',
+    2: 'Agent first — Used one GitHub-based agent surface: cloud agent, code review, or Copilot CLI.',
+    3: 'Multi-agent — Used two or more GitHub-based agent surfaces, or the GitHub Copilot app.'
+});
+
 function warnIfFileOrigin() {
     try {
         if (location.protocol === 'file:') {
@@ -203,7 +210,8 @@ function setupHighchartsTheme() {
                 if (!label && this.series) label = this.series.name;
                 // Escape if Highcharts provides helper
                 if (Highcharts.escapeHTML) label = Highcharts.escapeHTML(label);
-                return `<span style="font-weight:600">${label}</span><br/>${Highcharts.numberFormat(val, 0, '.', ',')}`;
+                const decimals = Number.isInteger(Number(val)) ? 0 : 2;
+                return `<span style="font-weight:600">${label}</span><br/>${Highcharts.numberFormat(val, decimals, '.', ',')}`;
             }
         },
         plotOptions: {
@@ -273,8 +281,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // AI Credits (premium request) CSV upload
+    const aiCreditsReportToggleEl = document.getElementById('aiCreditsReportToggle');
     const aiCreditsInputEl = document.getElementById('aiCreditsFileInput');
     const aiCreditsTriggerEl = document.getElementById('aiCreditsFileTrigger');
+    if (aiCreditsReportToggleEl) {
+        aiCreditsReportToggleEl.addEventListener('change', syncAiCreditsReportUploadVisibility);
+        syncAiCreditsReportUploadVisibility();
+    }
     if (aiCreditsTriggerEl && aiCreditsInputEl) {
         aiCreditsTriggerEl.addEventListener('click', () => aiCreditsInputEl.click());
     }
@@ -395,10 +408,19 @@ function syncSelectedFileName(inputEl, outputId, emptyText = 'No file chosen') {
     outputEl.title = fileName;
 }
 
+function syncAiCreditsReportUploadVisibility() {
+    const toggle = document.getElementById('aiCreditsReportToggle');
+    const wrapper = document.getElementById('aiCreditsFileWrap');
+    if (!toggle || !wrapper) return;
+    wrapper.hidden = !toggle.checked;
+    toggle.setAttribute('aria-expanded', String(toggle.checked));
+}
+
 function looksLikeUsageRecordObject(obj) {
     if (!obj || typeof obj !== 'object') return false;
     return [
         'ai_adoption_phase',
+        'ai_credits_used',
         'day',
         'day_totals',
         'enterprise_id',
@@ -703,6 +725,11 @@ function buildDashboardModel(data) {
     const userRecords = data.filter(isUserLevelRecord);
     const aggregateRecords = data.filter(record => !isUserLevelRecord(record));
     const overallRecords = aggregateRecords.length ? aggregateRecords : data;
+    const aggregateAiCreditsRecords = aggregateRecords.filter(recordHasAiCreditsUsed);
+    const userAiCreditsRecords = userRecords.filter(recordHasAiCreditsUsed);
+    const aiCreditsUsageRecords = aggregateAiCreditsRecords.length
+        ? aggregateAiCreditsRecords
+        : userAiCreditsRecords;
 
     const featureTotals = new Map();
     const ideTotals = new Map();
@@ -734,6 +761,7 @@ function buildDashboardModel(data) {
     let totalInteractions = 0;
     let totalGenerations = 0;
     let totalAcceptances = 0;
+    let totalAiCreditsUsed = 0;
     let hasCli = false;
     let hasPullRequests = false;
     let hasCodeReview = false;
@@ -819,6 +847,14 @@ function buildDashboardModel(data) {
             const prRow = getOrCreateMapValue(pullRequestDayMap, day, () => createPullRequestDayRow(day));
             accumulatePullRequestRow(prRow, record.pull_requests);
         }
+    });
+
+    aiCreditsUsageRecords.forEach(record => {
+        const creditsUsed = toNum(record.ai_credits_used);
+        totalAiCreditsUsed += creditsUsed;
+        if (!record.day) return;
+        const dayRow = getOrCreateMapValue(dayOverviewMap, record.day, () => createDailyOverviewRow(record.day));
+        dayRow.ai_credits_used += creditsUsed;
     });
 
     userRecords.forEach(record => {
@@ -917,10 +953,12 @@ function buildDashboardModel(data) {
         const row = getOrCreateMapValue(adoptionPhaseMap, key, () => ({
             phase: key,
             phase_number: info.phase_number,
+            version: info.version || 'v1',
             users: 0
         }));
         row.users += 1;
         row.phase_number = info.phase_number;
+        row.version = info.version || row.version;
     });
     const adoptionPhaseRows = Array.from(adoptionPhaseMap.values())
         .sort((a, b) => (a.phase_number - b.phase_number) || a.phase.localeCompare(b.phase));
@@ -993,6 +1031,8 @@ function buildDashboardModel(data) {
             hasCloudAgent,
             hasCodingAgent,
             hasAdoptionPhase: adoptionPhaseRows.length > 0,
+            hasAiCreditsUsed: aiCreditsUsageRecords.length > 0,
+            hasUserAiCreditsUsed: userAiCreditsRecords.length > 0,
             days,
             latestDay: days[days.length - 1] || '',
             earliestDay: days[0] || ''
@@ -1001,6 +1041,7 @@ function buildDashboardModel(data) {
             totalInteractions,
             totalGenerations,
             totalAcceptances,
+            totalAiCreditsUsed,
             acceptanceRate,
             latestDailyActiveUsers,
             latestWeeklyActiveUsers,
@@ -1122,6 +1163,15 @@ function renderCharts(model) {
         createChart('Weekly Active Users', 'line', model.breakdowns.weeklyRows.map(row => row.label), model.breakdowns.weeklyRows.map(row => row.value));
     }
 
+    if (model.meta.hasAiCreditsUsed && model.breakdowns.dailyRows.length) {
+        createChart(
+            'AI Credits Used per Day',
+            'area',
+            model.breakdowns.dailyRows.map(row => row.day),
+            model.breakdowns.dailyRows.map(row => +row.ai_credits_used.toFixed(2))
+        );
+    }
+
     if (model.breakdowns.adoptionPhaseRows && model.breakdowns.adoptionPhaseRows.length) {
         createChart(
             'AI Adoption Phase Distribution',
@@ -1148,6 +1198,18 @@ function renderCharts(model) {
         const topRateUsers = buildTopRows(model.userRows.filter(row => row.completions > 0), row => row.acceptance_rate, 10);
         if (topRateUsers.length) {
             createChart('Acceptance Rate % (Top Users)', 'bar', topRateUsers.map(row => row.user_login), topRateUsers.map(row => +row.acceptance_rate.toFixed(1)));
+        }
+
+        if (model.meta.hasUserAiCreditsUsed) {
+            const topCreditsUsers = buildTopRows(model.userRows, row => row.ai_credits_used, 10);
+            if (topCreditsUsers.length) {
+                createChart(
+                    'Top Users by AI Credits Used',
+                    'bar',
+                    topCreditsUsers.map(row => row.user_login),
+                    topCreditsUsers.map(row => +row.ai_credits_used.toFixed(2))
+                );
+            }
         }
     }
 
@@ -1276,7 +1338,7 @@ function renderReferenceTables(model) {
     if (dailyRows.length) {
         blocks.push(renderTableBlock(
             'Daily overview',
-            'Latest daily, weekly, and monthly active-user values plus code generation and LoC totals for each day.',
+            'Latest daily, weekly, and monthly active-user values plus AI Credits usage, code generation, and LoC totals for each day.',
             [
                 { key: 'day', label: 'Day' },
                 { key: 'daily_active_users', label: 'Daily active', type: 'number' },
@@ -1288,6 +1350,9 @@ function renderReferenceTables(model) {
                 { key: 'interactions', label: 'Interactions', type: 'number' },
                 { key: 'code_generations', label: 'Generations', type: 'number' },
                 { key: 'acceptances', label: 'Acceptances', type: 'number' },
+                ...(model.meta.hasAiCreditsUsed
+                    ? [{ key: 'ai_credits_used', label: 'AI Credits used', type: 'decimal' }]
+                    : []),
                 { key: 'loc_suggested_add', label: 'LoC suggested add', type: 'number' },
                 { key: 'loc_added', label: 'LoC added', type: 'number' },
                 { key: 'loc_deleted', label: 'LoC deleted', type: 'number' }
@@ -1371,14 +1436,20 @@ function renderReferenceTables(model) {
         const totalPhaseUsers = model.breakdowns.adoptionPhaseRows.reduce((acc, row) => acc + toNum(row.users), 0);
         const phaseRows = model.breakdowns.adoptionPhaseRows.map(row => ({
             ...row,
+            meaning: describeAiAdoptionPhase(row.phase_number, row.version),
             share: totalPhaseUsers ? (row.users / totalPhaseUsers) * 100 : 0
         }));
         blocks.push(renderTableBlock(
             'AI adoption phases',
-            'Distribution of users across AI adoption phases (each user counted once, using their most recent phase in range).',
+            'Distribution using each user’s most recent phase in range. v1 phases reflect Copilot surfaces used on at least two days in a rolling 28-day window.',
             [
                 { key: 'phase', label: 'Phase' },
                 { key: 'phase_number', label: 'Phase #', type: 'number' },
+                {
+                    key: 'meaning',
+                    label: 'Meaning',
+                    render: value => `<span class="table-cell-description">${escapeHtml(value)}</span>`
+                },
                 { key: 'users', label: 'Users', type: 'number' },
                 { key: 'share', label: 'Share %', type: 'decimal' }
             ],
@@ -1560,6 +1631,23 @@ function isUserLevelRecord(record) {
     return Boolean(record && (record.__record_scope === 'user' || record.user_id || record.user_login));
 }
 
+function describeAiAdoptionPhase(phaseNumber, version = 'v1') {
+    if (String(version).toLowerCase() !== 'v1') {
+        return `Definition unavailable for ${version}.`;
+    }
+    return AI_ADOPTION_PHASE_MEANINGS_V1[toNum(phaseNumber)]
+        || 'Definition unavailable for this phase.';
+}
+
+function recordHasAiCreditsUsed(record) {
+    return Boolean(
+        record
+        && record.ai_credits_used !== undefined
+        && record.ai_credits_used !== null
+        && Number.isFinite(Number(record.ai_credits_used))
+    );
+}
+
 function createDailyOverviewRow(day) {
     return {
         day,
@@ -1574,6 +1662,7 @@ function createDailyOverviewRow(day) {
         interactions: 0,
         code_generations: 0,
         acceptances: 0,
+        ai_credits_used: 0,
         loc_suggested_add: 0,
         loc_suggested_delete: 0,
         loc_added: 0,
@@ -2010,6 +2099,10 @@ function computeSummaryMetrics(model) {
         { label: 'Distinct Days', value: model.meta.days.length.toLocaleString() }
     ];
 
+    if (model.meta.hasAiCreditsUsed) {
+        cards.splice(4, 0, { label: 'AI Credits Used', value: fmtCredits(model.totals.totalAiCreditsUsed) });
+    }
+
     if (model.loc && (model.loc.totalSuggestedAdd > 0 || model.loc.totalAdded > 0 || model.loc.totalDeleted > 0)) {
         cards.splice(7, 0,
             { label: 'AI Lines Changed', value: model.totals.totalLinesChanged.toLocaleString() },
@@ -2121,6 +2214,11 @@ function clearAllData() {
     });
     syncSelectedFileName(document.getElementById('jsonFileInput'), 'jsonFileName');
     syncSelectedFileName(document.getElementById('aiCreditsFileInput'), 'aiCreditsFileName');
+    const aiCreditsReportToggle = document.getElementById('aiCreditsReportToggle');
+    if (aiCreditsReportToggle) {
+        aiCreditsReportToggle.checked = false;
+        syncAiCreditsReportUploadVisibility();
+    }
 
     // Reset filter controls back to their empty defaults.
     const search = document.getElementById('userSearch');
@@ -2571,6 +2669,7 @@ function aggregateUserUsage(data, creditsByUser) {
                 chat_modes: {},
                 cli_requests: 0,
                 cli_sessions: 0,
+                ai_credits_used: 0,
                 loc_suggested_add: 0,
                 loc_suggested_delete: 0,
                 loc_added: 0,
@@ -2582,6 +2681,7 @@ function aggregateUserUsage(data, creditsByUser) {
         row.interactions += (r.user_initiated_interaction_count || 0);
         row.completions += (r.code_generation_activity_count || 0);
         row.acceptances += (r.code_acceptance_activity_count || 0);
+        row.ai_credits_used += toNum(r.ai_credits_used);
         if (r.day) row.days_active.add(r.day);
         if (r.day && (r.used_chat || recordContainsChatActivity(r))) row.chat_days.add(r.day);
         if (r.day && (r.used_agent || recordContainsAgentActivity(r))) row.agent_days.add(r.day);
@@ -2678,14 +2778,25 @@ function buildUserUsageColumns() {
         { key: 'interactions', label: 'Interactions', type: 'number' },
         { key: 'completions', label: 'Completions', type: 'number' },
         { key: 'acceptances', label: 'Acceptances', type: 'number' },
-        { key: 'acceptance_rate', label: 'Acceptance %', type: 'decimal' },
+        { key: 'acceptance_rate', label: 'Acceptance %', type: 'decimal' }
+    ];
+    if (meta && meta.hasUserAiCreditsUsed) {
+        cols.push({
+            key: 'ai_credits_used',
+            label: 'AI Credits Used',
+            type: 'decimal',
+            render: r => escapeHtml(fmtCredits(r.ai_credits_used)),
+            csv: r => Number(r.ai_credits_used || 0).toFixed(2)
+        });
+    }
+    cols.push(
         { key: 'days_active_count', label: 'Days Active', type: 'number' },
         { key: 'chat_days_count', label: 'Chat Days', type: 'number' },
         { key: 'agent_days_count', label: 'Agent Days', type: 'number' },
         { key: 'cli_days_count', label: 'CLI Days', type: 'number' },
         { key: 'review_active_days_count', label: 'Review Active Days', type: 'number' },
         { key: 'review_passive_days_count', label: 'Review Passive Days', type: 'number' }
-    ];
+    );
     if (meta && meta.hasAdoptionPhase) cols.push({ key: 'adoption_phase', label: 'Adoption Phase', type: 'text' });
     if (meta && meta.hasCloudAgent) cols.push({ key: 'cloud_agent_days_count', label: 'Cloud Agent Days', type: 'number' });
     if (meta && meta.hasCodingAgent) cols.push({ key: 'coding_agent_days_count', label: 'Coding Agent Days', type: 'number' });
@@ -2698,8 +2809,9 @@ function buildUserUsageColumns() {
         { key: 'loc_deleted', label: 'LoC Deleted', type: 'number' }
     );
     if (hasCredits) {
+        const creditsLabel = meta && meta.hasUserAiCreditsUsed ? 'Billed AI Credits' : 'AI Credits';
         cols.push(
-            { key: 'ai_credits', label: 'AI Credits', type: 'decimal', render: r => escapeHtml(fmtCredits(r.ai_credits)), csv: r => Number(r.ai_credits || 0).toFixed(2) },
+            { key: 'ai_credits', label: creditsLabel, type: 'decimal', render: r => escapeHtml(fmtCredits(r.ai_credits)), csv: r => Number(r.ai_credits || 0).toFixed(2) },
             { key: 'ai_credit_cost', label: 'AI Credit Cost', type: 'currency', render: r => escapeHtml(fmtCurrency(r.ai_credit_cost)), csv: r => Number(r.ai_credit_cost || 0).toFixed(2) }
         );
     }
