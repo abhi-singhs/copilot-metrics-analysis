@@ -2,7 +2,7 @@
 
 **Please note this is not an official solution from GitHub.**
 
-This is a local, client‑side dashboard for exploring GitHub Copilot usage exports. It supports both **local file uploads** and **direct GitHub API integration** for organization members filtering. No data is uploaded to a server: everything stays in your browser.
+This is a local, client‑side dashboard for exploring GitHub Copilot usage exports. It supports both **local file uploads** and **direct GitHub API integration** for organization members filtering. No data is uploaded to a server: everything stays in your browser. Analysis is organized into page-style views for **Overview**, **Charts**, **AI Credits**, **Reference Tables**, and **Users** while preserving the loaded data in memory.
 
 The dashboard now handles both:
 * **User-level records** (for per-user analysis, user flags, and CSV export)
@@ -88,7 +88,7 @@ The dashboard now supports two data sources:
 
 ### 4. Load data
 1. Click “Upload Copilot Metrics JSON” and choose your export file.
-2. The status message will show progress; once parsed, summary metric cards and charts render automatically.
+2. The status message will show progress; once parsed, the **Overview** page opens automatically and the Load & Filter drawer collapses to a compact file, record-count, date-range, and active-filter summary. Reopen it at any time to change the data or filters.
 3. (Optional) Upload the members file to activate the “Members only” checkbox.
 
 Screenshots:
@@ -100,7 +100,7 @@ Screenshots:
 ---
 
 ### 4. Use filters & quick ranges
-* User Search: type part of a login (case‑insensitive) to narrow results.
+* Dashboard User Filter: type part of a login (case‑insensitive) to narrow metrics across every page.
 * Date Range: set explicit From / To days, or use quick buttons (7d / 14d / 28d / All) for instant ranges.
 * Members only: after loading a members file, restrict metrics to those users.
 * Apply Filters: re‑computes the summary cards and all charts with current criteria.
@@ -109,7 +109,9 @@ Screenshots:
 ### 5. Explore the metrics
 Summary cards now reflect the latest Copilot usage metrics reference, including active-user rollups, chat usage, AI Credits used, LoC changed with AI, agent contribution, CLI usage, code review activity, and pull request totals when present in the export.
 
-Below them, the dashboard renders updated chart groups for:
+Use the page navigation above the Load & Filter drawer to move between the Overview, Charts, Reference Tables, and Users views without reloading the uploaded data. The AI Credits page appears when an AI Credits usage report is loaded.
+
+The Charts page renders updated chart groups for:
 * Adoption, usage, AI Credits used per day, and chat modes (including **AI adoption phase distribution**)
 * Model usage (overall, per day, per chat mode, per language)
 * Language usage (overall and per day)
@@ -131,7 +133,7 @@ The report can be loaded on its own (cost-only) or alongside a metrics export. W
 The `ai_credits_used` value in the metrics JSON is handled independently and does not require the billing CSV. It appears in key metrics, the daily overview and chart, and per-user analysis. When both sources are loaded, the user table distinguishes **AI Credits Used** from the metrics export and **Billed AI Credits** / **AI Credit Cost** from the billing report.
 
 #### Reference tables
-The **Reference tables** section mirrors the newer schema with sortable-by-filter tables for:
+The **Reference Tables** page mirrors the newer schema with sortable-by-filter tables for:
 * Daily overview values, including AI Credits used when available
 * Feature, language, model, and IDE breakdowns
 * AI adoption phases
@@ -142,7 +144,7 @@ The **Reference tables** section mirrors the newer schema with sortable-by-filte
 The **AI adoption phases** table includes the v1 meaning for each cohort. Phase classification is based on Copilot surfaces used on at least two days in a rolling 28-day window: **Phase 0 — No cohort**, **Phase 1 — Code first**, **Phase 2 — Agent first**, and **Phase 3 — Multi-agent**.
 
 #### Per-user detail & CSV export
-Click the **User Usage Table** button (enabled when user-level records are present) to view a sortable table of aggregated metrics per user. It now includes:
+The **Users** page is always available in the page navigation. It shows a clear empty state before upload or when the current export/filter set has no user-level records, and otherwise displays a sortable table of aggregated metrics per user. It includes:
 * Interactions, completions, acceptances, acceptance %
 * Active days, chat days, agent days, CLI days, and code review days
 * Adoption phase, cloud agent days, and coding agent days (when those fields are present)
@@ -154,9 +156,10 @@ Click the **User Usage Table** button (enabled when user-level records are prese
 
 You can:
 * Click column headers to sort ascending/descending.
-* Export the current filtered per-user aggregations to CSV via the **Export CSV** button inside the table view.
-* Use existing filters (date range, user search, members only) then open or refresh the table; it always reflects current filters.
-* Click **Back to Dashboard** to return to the charts and reference tables.
+* Search logins live with the search field above the table. This search affects only the Users table, not the Overview, Charts, AI Credits, or Reference Tables pages.
+* Page through 25 users by default, or choose 10, 25, 50, or 100 rows per page.
+* Export every user matching both the global dashboard filters and the table-local search via **Export CSV**. Export includes all matching pages, not just the visible page.
+* Use the global date range, dashboard user filter, and members-only filter to update every page; the Users table refreshes automatically.
 
 Hover any chart element for tooltips. Categories auto‑trim if extremely long to preserve readability.
 

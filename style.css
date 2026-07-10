@@ -197,6 +197,7 @@ body {
 a,
 button,
 input,
+select,
 textarea,
 summary {
     -webkit-tap-highlight-color: transparent;
@@ -226,17 +227,25 @@ header.app-header {
     position: sticky;
     top: 0;
     z-index: 20;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem 1rem;
+    display: grid;
     width: 100%;
     max-width: 1680px;
     margin-inline: auto;
-    padding: 0.75rem;
+    padding: 0;
     background: var(--header-bg);
     border-bottom: 1px solid var(--panel-border);
     box-shadow: none;
+}
+
+.app-header-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    min-width: 0;
+    width: 100%;
+    padding: 0.65rem 0.75rem;
 }
 
 .logo-title {
@@ -350,6 +359,7 @@ html[data-theme="dark"] .theme-toggle .theme-icon-moon {
 }
 
 main {
+    position: relative;
     max-width: 1680px;
     margin-inline: auto;
     padding: 0.75rem;
@@ -365,7 +375,75 @@ main {
 }
 
 .controls-panel {
+    padding: 0;
+    overflow: hidden;
     background: var(--panel);
+}
+
+.controls-disclosure > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.72rem 0.85rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.controls-disclosure > summary::-webkit-details-marker {
+    display: none;
+}
+
+.controls-disclosure[open] > summary {
+    border-bottom: 1px solid var(--panel-border);
+    background: var(--panel-subtle);
+}
+
+.controls-summary-copy {
+    display: grid;
+    gap: 0.18rem;
+    min-width: 0;
+}
+
+.controls-summary-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 750;
+}
+
+.controls-summary-text {
+    overflow: hidden;
+    color: var(--text-dim);
+    font-size: 0.84rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.controls-summary-action {
+    flex: 0 0 auto;
+    color: var(--accent);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.controls-summary-action::before {
+    content: "Hide controls";
+}
+
+.controls-disclosure:not([open]) .controls-summary-action::before {
+    content: "Show controls";
+}
+
+.controls-drawer-body {
+    padding: 0.75rem;
+}
+
+.controls-drawer-body > .panel-intro {
+    margin: 0 0 0.75rem;
 }
 
 .section-heading {
@@ -652,9 +730,11 @@ fieldset {
 }
 
 input[type="text"],
+input[type="search"],
 input[type="date"],
 input[type="password"],
-textarea {
+textarea,
+select {
     width: 100%;
     min-height: 32px;
     padding: 0.42rem 0.65rem;
@@ -1001,12 +1081,16 @@ button:disabled {
 }
 
 #statusMessage {
-    margin-top: 0.75rem;
+    margin: 0.75rem;
     padding: 0.7rem 0.8rem;
     border: 1px solid transparent;
     border-radius: var(--radius);
     background: var(--panel-subtle);
     color: var(--text-dim);
+}
+
+.controls-disclosure:not([open]) + #statusMessage[data-state="info"] {
+    display: none;
 }
 
 #statusMessage:empty {
@@ -1332,6 +1416,46 @@ button:disabled {
     gap: 0.5rem;
 }
 
+.user-table-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin: 0.8rem 0;
+    padding: 0.7rem;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    background: var(--panel-subtle);
+}
+
+.user-table-search-control {
+    flex: 1 1 260px;
+    max-width: 34rem;
+}
+
+.user-table-toolbar-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem 1rem;
+}
+
+.page-size-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-dim);
+    font-size: 0.84rem;
+    font-weight: 650;
+}
+
+.page-size-control select {
+    width: auto;
+    min-width: 4.5rem;
+}
+
 .usage-table {
     width: 100%;
     border-collapse: separate;
@@ -1399,6 +1523,13 @@ button:disabled {
     font-weight: 700;
 }
 
+.usage-table .user-table-empty {
+    padding: 2rem 1rem;
+    color: var(--text-dim);
+    text-align: center;
+    white-space: normal;
+}
+
 .usage-table th.sortable {
     padding-top: 0.55rem;
     padding-bottom: 0.55rem;
@@ -1441,6 +1572,51 @@ button.sort-button::after {
     content: "\2193";
     color: var(--accent-strong);
     opacity: 1;
+}
+
+.user-table-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.pagination-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pagination-status {
+    min-width: 6.5rem;
+    color: var(--text-dim);
+    font-size: 0.84rem;
+    font-weight: 650;
+    text-align: center;
+}
+
+.page-empty-state {
+    grid-column: 1 / -1;
+    padding: clamp(1.2rem, 2.4vw, 2rem);
+    border: 1px dashed var(--panel-border-strong);
+    border-radius: var(--radius);
+    background: var(--panel-subtle);
+    text-align: center;
+}
+
+.page-empty-state h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.page-empty-state p {
+    margin: 0.4rem auto 0;
+    max-width: 62ch;
+    color: var(--text-dim);
+    font-size: 0.9rem;
 }
 
 .loading-overlay {
@@ -1544,6 +1720,7 @@ code {
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible,
 .user-table-wrapper:focus-visible {
@@ -1551,21 +1728,24 @@ summary:focus-visible,
     outline-offset: 2px;
 }
 
-/* ===== Jump-to-section nav ===== */
-.section-nav {
+/* ===== Dashboard page navigation ===== */
+.page-nav {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.35rem 0.5rem;
-    margin: 0 0 0.6rem;
-    padding: 0.45rem 0.55rem;
-    border: 1px solid var(--panel-border);
-    border-radius: var(--radius);
-    background: var(--panel);
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0.42rem 0.75rem;
+    border: 0;
+    border-top: 1px solid var(--panel-border);
+    border-radius: 0;
+    background: transparent;
     box-shadow: none;
 }
 
-.section-nav-label {
+.page-nav-label {
     padding-inline: 0.35rem;
     color: var(--text-soft);
     font-size: 0.72rem;
@@ -1574,16 +1754,28 @@ summary:focus-visible,
     text-transform: uppercase;
 }
 
-.section-nav-list {
+.page-nav-list {
     display: flex;
+    flex: 1 1 auto;
     flex-wrap: wrap;
     gap: 0.3rem;
+    min-width: 0;
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
-.section-nav a {
+.page-nav-download {
+    flex: 0 0 auto;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.page-nav-download-label-short {
+    display: none;
+}
+
+.page-nav a {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -1600,15 +1792,29 @@ summary:focus-visible,
     transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
-.section-nav a:hover {
+.page-nav a:hover {
     border-color: var(--panel-border);
     background: var(--accent-soft);
     color: var(--accent-strong);
 }
 
-/* Offset anchor targets so the sticky header does not cover section headings */
-main section[id] {
+.page-nav a[aria-current="page"] {
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--panel-border));
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.page-panel {
     scroll-margin-top: calc(var(--header-h, 76px) + 10px);
+}
+
+.page-panel.page-rendering {
+    position: absolute;
+    inset-inline: 0.75rem;
+    width: auto;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 /* ===== Back-to-top floating button ===== */
@@ -1690,12 +1896,6 @@ button.back-to-top:hover:not(:disabled) {
 }
 
 @media (max-width: 900px) {
-    header.app-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-
     .control-toolbar {
         grid-template-columns: 1fr;
     }
@@ -1730,11 +1930,11 @@ button.back-to-top:hover:not(:disabled) {
     }
 
     .top-nav {
-        width: 100%;
+        width: auto;
     }
 
     .top-nav .nav-list {
-        width: 100%;
+        width: auto;
         align-items: center;
         justify-content: flex-start;
     }
@@ -1775,15 +1975,77 @@ button.back-to-top:hover:not(:disabled) {
     .user-usage-actions button {
         flex: 1 1 160px;
     }
+
+    .controls-summary-text {
+        white-space: normal;
+    }
+
+    .app-header-main {
+        flex-wrap: nowrap;
+    }
+
+    .top-nav-label,
+    .page-nav-label {
+        display: none;
+    }
+
+    .top-nav a {
+        justify-content: center;
+        width: 32px;
+        padding-inline: 0;
+    }
+
+    .page-nav {
+        flex-wrap: nowrap;
+    }
+
+    .page-nav-list {
+        order: initial;
+        flex: 1 1 0;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 0.15rem;
+    }
+
+    .page-nav-download {
+        order: initial;
+    }
+
+    .page-nav-download-label {
+        display: none;
+    }
+
+    .page-nav-download-label-short {
+        display: inline;
+    }
+
+    .page-nav a {
+        white-space: nowrap;
+    }
+
+    .user-table-toolbar-meta {
+        width: 100%;
+        justify-content: space-between;
+    }
 }
 
 @media (max-width: 520px) {
-    header.app-header {
-        padding-top: 1rem;
+    .app-header-main {
+        padding-top: 0.75rem;
     }
 
     .logo-title h1 {
         font-size: 1.6rem;
+    }
+
+    .page-nav-download {
+        width: 34px;
+        padding-inline: 0;
+    }
+
+    .page-nav-download-label,
+    .page-nav-download-label-short {
+        display: none;
     }
 
     .quick-ranges {
@@ -1800,6 +2062,19 @@ button.back-to-top:hover:not(:disabled) {
         font-size: 0.85rem;
     }
 
+    .user-table-pagination {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .pagination-actions {
+        width: 100%;
+    }
+
+    .pagination-actions button {
+        flex: 1 1 0;
+    }
+
     .back-to-top {
         width: 44px;
         height: 44px;
@@ -1814,7 +2089,7 @@ button.back-to-top:hover:not(:disabled) {
     .app-header,
     .controls-panel,
     .app-footer,
-    .section-nav,
+    .page-nav,
     .back-to-top,
     .loading-overlay {
         display: none !important;
@@ -1838,7 +2113,7 @@ body.printing .app-footer {
     opacity: 0.3;
 }
 
-body.printing .section-nav,
+body.printing .page-nav,
 body.printing .back-to-top {
     display: none !important;
 }

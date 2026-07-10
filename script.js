@@ -1,5 +1,13 @@
 // Initialize theme and placeholders; user must upload a file now (no default data.json)
 const THEME_STORAGE_KEY = 'copilotMetricsTheme';
+const DASHBOARD_PAGES = Object.freeze({
+    overview: 'summarySection',
+    charts: 'chartsSection',
+    credits: 'creditsSection',
+    tables: 'tablesSection',
+    users: 'userUsageSection'
+});
+let activeDashboardPage = 'overview';
 
 window.addEventListener('load', () => {
     syncThemeDocumentState(getPreferredTheme());
@@ -7,6 +15,7 @@ window.addEventListener('load', () => {
     updateThemeToggleState(getCurrentTheme());
     setStatus('Ready for a metrics export. Upload a JSON or JSON Lines file to populate the dashboard.');
     renderPlaceholders();
+    syncControlsSummary();
     warnIfFileOrigin();
 });
 
@@ -131,7 +140,8 @@ function refreshThemeCharts() {
     setupHighchartsTheme();
     const activeData = Array.isArray(window.__currentFilteredData) ? window.__currentFilteredData : [];
     if (activeData.length && window.__dashboardModel) {
-        renderCharts(window.__dashboardModel);
+        withDashboardPageMeasurable('charts', () => renderCharts(window.__dashboardModel));
+        updateCreditsView();
     }
 }
 
@@ -299,22 +309,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Per-user usage view navigation & export
-    const userUsageBtn = document.getElementById('userUsageBtn');
-    const backBtn = document.getElementById('backToDashboardBtn');
+    // Per-user table controls & export
     const exportUsersCsvBtn = document.getElementById('exportUsersCsvBtn');
-    if (userUsageBtn) {
-        userUsageBtn.addEventListener('click', () => {
-            buildUserUsageTable(window.__currentFilteredData || window.__rawData || []);
-            toggleUserUsage(true);
-        });
-    }
-    if (backBtn) {
-        backBtn.addEventListener('click', () => toggleUserUsage(false));
-    }
     if (exportUsersCsvBtn) {
         exportUsersCsvBtn.addEventListener('click', () => exportUserUsageCsv());
     }
+    initializeUserUsageControls();
 
     const clearDataBtn = document.getElementById('clearDataBtn');
     if (clearDataBtn) {
@@ -322,8 +322,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     initializeHeaderHeightVar();
-    initializeSectionNav();
+    initializePageNavigation();
     initializeBackToTop();
+    syncControlsSummary();
 });
 
 function initializeHeaderHeightVar() {
@@ -340,40 +341,163 @@ function initializeHeaderHeightVar() {
     }
 }
 
-function initializeSectionNav() {
-    const nav = document.querySelector('.section-nav');
+function initializePageNavigation() {
+    const nav = document.querySelector('.page-nav');
     if (!nav) return;
 
-    // Smooth-scroll to the target section and move focus for accessibility.
     nav.addEventListener('click', (e) => {
-        const link = e.target.closest('a[href^="#"]');
+        const link = e.target.closest('a[data-page-target]');
         if (!link) return;
-        const id = link.getAttribute('href').slice(1);
-        const target = document.getElementById(id);
-        if (!target) return;
         e.preventDefault();
-        target.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
-        if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
-        target.focus({ preventScroll: true });
-        if (window.history && typeof window.history.replaceState === 'function') {
-            window.history.replaceState(null, '', '#' + id);
-        }
+        setDashboardPage(link.dataset.pageTarget, {
+            focus: false,
+            historyMode: 'push',
+            scroll: false
+        });
     });
 
-    // Keep each jump link in sync with its section's visibility.
-    const toggleable = ['chartsSection', 'creditsSection', 'tablesSection', 'userUsageSection'];
-    const sync = (sectionId) => {
-        const li = nav.querySelector('li[data-section-link="' + sectionId + '"]');
-        const section = document.getElementById(sectionId);
-        if (li && section) li.hidden = !!section.hidden;
-    };
-    toggleable.forEach((sectionId) => {
+    window.addEventListener('popstate', () => {
+        setDashboardPage(getDashboardPageFromHash(), {
+            focus: false,
+            historyMode: null,
+            scroll: false
+        });
+    });
+
+    updateDashboardPageAvailability();
+    setDashboardPage(getDashboardPageFromHash(), {
+        focus: false,
+        historyMode: 'replace',
+        scroll: false
+    });
+}
+
+function getDashboardPageFromHash() {
+    const page = window.location.hash.replace(/^#/, '');
+    return Object.prototype.hasOwnProperty.call(DASHBOARD_PAGES, page) ? page : 'overview';
+}
+
+function isDashboardPageAvailable(page) {
+    return page !== 'credits' || Boolean(window.__hasCredits);
+}
+
+function updateDashboardPageAvailability() {
+    const creditsLink = document.querySelector('[data-page-link="credits"]');
+    if (creditsLink) creditsLink.hidden = !isDashboardPageAvailable('credits');
+    if (!isDashboardPageAvailable(activeDashboardPage)) {
+        setDashboardPage('overview', {
+            focus: false,
+            historyMode: 'replace',
+            scroll: false
+        });
+    }
+}
+
+function setDashboardPage(page, {
+    focus = true,
+    historyMode = null,
+    scroll = true
+} = {}) {
+    const resolvedPage = Object.prototype.hasOwnProperty.call(DASHBOARD_PAGES, page) && isDashboardPageAvailable(page)
+        ? page
+        : 'overview';
+    activeDashboardPage = resolvedPage;
+
+    Object.entries(DASHBOARD_PAGES).forEach(([pageName, sectionId]) => {
         const section = document.getElementById(sectionId);
         if (!section) return;
-        sync(sectionId);
-        new MutationObserver(() => sync(sectionId))
-            .observe(section, { attributes: true, attributeFilter: ['hidden'] });
+        const isActive = pageName === resolvedPage;
+        section.hidden = !isActive;
+        section.classList.toggle('is-active', isActive);
+        section.setAttribute('aria-hidden', String(!isActive));
+        if ('inert' in section) section.inert = !isActive;
     });
+
+    document.querySelectorAll('.page-nav a[data-page-target]').forEach(link => {
+        const isActive = link.dataset.pageTarget === resolvedPage;
+        if (isActive) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+    });
+
+    const target = document.getElementById(DASHBOARD_PAGES[resolvedPage]);
+    if (resolvedPage === 'charts' || resolvedPage === 'credits') {
+        window.requestAnimationFrame(() => reflowChartsWithin(target));
+    }
+    if (scroll && target) {
+        target.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
+    }
+    if (focus && target) {
+        target.focus({ preventScroll: true });
+    }
+
+    const hash = '#' + resolvedPage;
+    if (historyMode && window.history && window.location.hash !== hash) {
+        const method = historyMode === 'push' ? 'pushState' : 'replaceState';
+        window.history[method](null, '', hash);
+    }
+}
+
+function withDashboardPageMeasurable(page, callback) {
+    const section = document.getElementById(DASHBOARD_PAGES[page]);
+    if (!section || !section.hidden) return callback();
+
+    section.hidden = false;
+    section.classList.add('page-rendering');
+    try {
+        return callback();
+    } finally {
+        section.classList.remove('page-rendering');
+        section.hidden = true;
+    }
+}
+
+function reflowChartsWithin(container) {
+    if (!container || typeof Highcharts === 'undefined') return;
+    Highcharts.charts.forEach(chart => {
+        if (chart && chart.renderTo && container.contains(chart.renderTo)) chart.reflow();
+    });
+}
+
+function setControlsDrawerOpen(open) {
+    const drawer = document.getElementById('controlsDrawer');
+    if (drawer) drawer.open = Boolean(open);
+}
+
+function syncControlsSummary() {
+    const summary = document.getElementById('controlsSummaryText');
+    if (!summary) return;
+    const rawCount = Array.isArray(window.__rawData) ? window.__rawData.length : 0;
+    const creditCount = Array.isArray(window.__aiCreditsRaw) ? window.__aiCreditsRaw.length : 0;
+    if (!rawCount) {
+        summary.textContent = creditCount
+            ? `${creditCount.toLocaleString()} AI Credit rows loaded. Open the controls to add a metrics export or change filters.`
+            : 'No metrics loaded. Open the controls to upload an export.';
+        return;
+    }
+
+    const filteredCount = Array.isArray(window.__currentFilteredData)
+        ? window.__currentFilteredData.length
+        : rawCount;
+    const state = getActiveFilterState();
+    const fileName = window.__metricsFileName || 'Metrics export';
+    const parts = [
+        fileName,
+        `${filteredCount.toLocaleString()} of ${rawCount.toLocaleString()} records`
+    ];
+    if (state.from || state.to) parts.push(`${state.from || 'start'} to ${state.to || 'latest'}`);
+    if (state.search) parts.push(`user contains "${state.search}"`);
+    if (state.membersOnly) parts.push('members only');
+    summary.textContent = parts.join(' · ');
+}
+
+function expandControlsForError() {
+    setControlsDrawerOpen(true);
+    syncControlsSummary();
+}
+
+function collapseControlsAfterLoad() {
+    syncControlsSummary();
+    setControlsDrawerOpen(false);
 }
 
 function initializeBackToTop() {
@@ -406,6 +530,7 @@ function syncSelectedFileName(inputEl, outputId, emptyText = 'No file chosen') {
     const fileName = inputEl.files && inputEl.files[0] ? inputEl.files[0].name : emptyText;
     outputEl.textContent = fileName;
     outputEl.title = fileName;
+    syncControlsSummary();
 }
 
 function syncAiCreditsReportUploadVisibility() {
@@ -501,7 +626,11 @@ function parseUploadedText(text) {
 }
 
 function handleFileSelection(file) {
-    if (!file) { setStatus('No file selected. Please choose a JSON / JSONL export file.'); return; }
+    if (!file) {
+        expandControlsForError();
+        setStatus('No file selected. Please choose a JSON / JSONL export file.');
+        return;
+    }
     showLoading(true);
     setStatus(`Reading ${file.name} …`);
     const reader = new FileReader();
@@ -515,18 +644,31 @@ function handleFileSelection(file) {
             }
             window.__sourceData = data;
             window.__rawData = normalized;
+            window.__metricsFileName = file.name;
+            resetUserUsageTableState({ clearQuery: true, resetPreferences: true });
             initializeFilters(normalized);
             analyzeData(normalized);
             setStatus(`Loaded ${normalized.length} usable records from ${file.name}`);
             enableDownloadButton();
+            setDashboardPage('overview', {
+                focus: false,
+                historyMode: 'replace',
+                scroll: false
+            });
+            collapseControlsAfterLoad();
         } catch (err) {
             console.error(err);
+            expandControlsForError();
             setStatus(`Upload parse error: ${err.message}`, true);
         } finally {
             showLoading(false);
         }
     };
-    reader.onerror = () => { setStatus('File read error', true); showLoading(false); };
+    reader.onerror = () => {
+        expandControlsForError();
+        setStatus('File read error', true);
+        showLoading(false);
+    };
     reader.readAsText(file);
 }
 
@@ -651,14 +793,24 @@ function loadDataFile(filename) {
                 const normalized = normalizeUsageRecords(data);
                 window.__sourceData = data;
                 window.__rawData = normalized;
+                window.__metricsFileName = filename;
+                resetUserUsageTableState({ clearQuery: true, resetPreferences: true });
                 initializeFilters(normalized);
                 analyzeData(normalized);
                 enableDownloadButton();
+                setDashboardPage('overview', {
+                    focus: false,
+                    historyMode: 'replace',
+                    scroll: false
+                });
+                collapseControlsAfterLoad();
             } catch (error) {
+                expandControlsForError();
                 setStatus(`Parse error: ${error.message}`, true);
             }
         })
         .catch(error => {
+            expandControlsForError();
             setStatus(`Load error: ${error.message}`, true);
         })
         .finally(() => {
@@ -669,6 +821,7 @@ function loadDataFile(filename) {
 function analyzeData(data) {
     const chartsContainer = document.getElementById('chartsContainer');
     if (chartsContainer) chartsContainer.innerHTML = '';
+    window.__currentFilteredData = Array.isArray(data) ? data : [];
 
     if (!data || data.length === 0) {
         const hasLoadedData = Boolean(window.__rawData && window.__rawData.length);
@@ -680,15 +833,12 @@ function analyzeData(data) {
                     ? 'AI Credits report loaded. Upload a usage-metrics JSON/JSONL file to combine credit cost with engagement metrics.'
                     : 'Ready for a metrics export. Upload a JSON or JSON Lines file to populate the dashboard.')
         );
-        const tablesSection = document.getElementById('tablesSection');
-        if (tablesSection) tablesSection.hidden = true;
         renderPlaceholders(hasLoadedData ? 'filters' : 'upload');
         const downloadBtn = document.getElementById('downloadPdfBtn');
         if (downloadBtn) downloadBtn.disabled = true;
-        const userUsageBtn = document.getElementById('userUsageBtn');
-        if (userUsageBtn) userUsageBtn.disabled = true;
         updateClearButtonState();
         updateCreditsView();
+        syncControlsSummary();
         return;
     }
 
@@ -697,23 +847,18 @@ function analyzeData(data) {
     window.__currentFilteredData = data;
 
     computeSummaryMetrics(model);
-    renderCharts(model);
+    withDashboardPageMeasurable('charts', () => renderCharts(model));
     renderReferenceTables(model);
     updateCreditsView();
+    buildUserUsageTable(data);
     enableDownloadButton();
     updateClearButtonState();
-
-    const userUsageBtn = document.getElementById('userUsageBtn');
-    if (userUsageBtn) userUsageBtn.disabled = !model.meta.hasUserRecords;
-    if (!model.meta.hasUserRecords) {
-        const userUsageSection = document.getElementById('userUsageSection');
-        if (userUsageSection && !userUsageSection.hidden) toggleUserUsage(false);
-    }
 
     const scopeLabel = model.meta.hasAggregateRecords
         ? (model.meta.hasUserRecords ? 'mixed export' : 'aggregate export')
         : 'user export';
     setStatus(`Displaying ${model.meta.recordCount.toLocaleString()} records across ${model.meta.days.length.toLocaleString()} days (${scopeLabel})`);
+    syncControlsSummary();
 
     const main = document.getElementById('mainContent');
     if (main) {
@@ -1329,9 +1474,8 @@ function renderCharts(model) {
 }
 
 function renderReferenceTables(model) {
-    const section = document.getElementById('tablesSection');
     const container = document.getElementById('tablesContainer');
-    if (!section || !container) return;
+    if (!container) return;
 
     const blocks = [];
     const dailyRows = [...model.breakdowns.dailyRows].reverse();
@@ -1512,13 +1656,25 @@ function renderReferenceTables(model) {
     }
 
     if (!blocks.length) {
-        section.hidden = true;
-        container.innerHTML = '';
+        renderReferenceTablesEmpty('filters');
         return;
     }
 
-    section.hidden = false;
     container.innerHTML = blocks.join('');
+}
+
+function renderReferenceTablesEmpty(mode = 'upload') {
+    const container = document.getElementById('tablesContainer');
+    if (!container) return;
+    const hasFilteredData = mode === 'filters';
+    const title = hasFilteredData ? 'No reference tables match these filters' : 'Reference tables appear after upload';
+    const description = hasFilteredData
+        ? 'Widen the global filters to restore daily and breakdown tables.'
+        : 'Load a metrics export to inspect exact daily, feature, model, language, IDE, and activity values.';
+    container.innerHTML = `<div class="page-empty-state" role="note">
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(description)}</p>
+    </div>`;
 }
 
 function renderTableBlock(title, note, columns, rows, open = false) {
@@ -2029,13 +2185,9 @@ function applyFilters() {
     if (membersOnly && window.__membersSet) {
         filtered = filtered.filter(r => window.__membersSet.has((r.user_login || '').toLowerCase()));
     }
-    analyzeData(filtered);
-    // Cache for user usage table & update if visible
     window.__currentFilteredData = filtered;
-    const userUsageSection = document.getElementById('userUsageSection');
-    if (userUsageSection && !userUsageSection.hidden) {
-        buildUserUsageTable(filtered);
-    }
+    analyzeData(filtered);
+    syncControlsSummary();
 }
 
 function enableApplyButton() {
@@ -2170,6 +2322,7 @@ function setStatus(msg, isError=false) {
     el.setAttribute('aria-live', isError ? 'assertive' : 'polite');
     el.setAttribute('aria-atomic', 'true');
     window.__statusMessage = { text: msg, error: !!isError };
+    syncControlsSummary();
 }
 
 function showLoading(show) {
@@ -2184,8 +2337,6 @@ function showLoading(show) {
 function enableDownloadButton() {
     const btn = document.getElementById('downloadPdfBtn');
     if (btn) btn.disabled = false;
-    const uBtn = document.getElementById('userUsageBtn');
-    if (uBtn) uBtn.disabled = !(window.__dashboardModel && window.__dashboardModel.meta.hasUserRecords);
 }
 
 function updateClearButtonState() {
@@ -2206,6 +2357,10 @@ function clearAllData() {
     window.__membersSet = null;
     window.__allDays = [];
     window.__hasCredits = false;
+    window.__metricsFileName = null;
+    window.__userUsageRows = null;
+    window.__userUsageColumns = null;
+    resetUserUsageTableState({ clearQuery: true, resetPreferences: true });
 
     // Reset the file inputs and their displayed names.
     ['jsonFileInput', 'aiCreditsFileInput', 'membersFileInput'].forEach(id => {
@@ -2233,32 +2388,22 @@ function clearAllData() {
     });
     updateMembersStatus();
 
-    // Return to the dashboard view and clear rendered content.
-    const userUsageSection = document.getElementById('userUsageSection');
-    if (userUsageSection) userUsageSection.hidden = true;
-    const chartsSection = document.getElementById('chartsSection');
-    if (chartsSection) chartsSection.hidden = false;
-    const userTable = document.getElementById('userUsageTable');
-    if (userTable) {
-        const thead = userTable.querySelector('thead');
-        const tbody = userTable.querySelector('tbody');
-        if (thead) thead.innerHTML = '';
-        if (tbody) tbody.innerHTML = '';
-    }
-    const tablesContainer = document.getElementById('tablesContainer');
-    if (tablesContainer) tablesContainer.innerHTML = '';
-    const tablesSection = document.getElementById('tablesSection');
-    if (tablesSection) tablesSection.hidden = true;
-    updateCreditsView(); // no credits -> hides and clears the cost section
+    updateCreditsView();
+    setDashboardPage('overview', {
+        focus: false,
+        historyMode: 'replace',
+        scroll: false
+    });
 
     // Disable the data-dependent actions.
-    ['applyFiltersBtn', 'downloadPdfBtn', 'userUsageBtn', 'exportUsersCsvBtn', 'clearDataBtn'].forEach(id => {
+    ['applyFiltersBtn', 'downloadPdfBtn', 'exportUsersCsvBtn', 'clearDataBtn'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.disabled = true;
     });
 
     // Restore the initial empty state.
     renderPlaceholders('upload');
+    setControlsDrawerOpen(true);
     setStatus('Cleared all loaded data. Upload a JSON or JSON Lines file to populate the dashboard.');
 
     // Send the user back to the top and refocus the metrics file picker.
@@ -2371,6 +2516,8 @@ function renderPlaceholders(mode = 'upload') {
     if (metrics) metrics.innerHTML = buildMetricPlaceholders(mode);
     const charts = document.getElementById('chartsContainer');
     if (charts) charts.innerHTML = buildChartPlaceholders(mode);
+    renderReferenceTablesEmpty(mode);
+    buildUserUsageTable([]);
 }
 
 // --- Enhanced PDF generation (multi-page) ---
@@ -2621,24 +2768,64 @@ async function generatePdfReport() {
 }
 
 // ================= Per-User Usage Table & CSV Export ================= //
-let userUsageSort = { key: 'user_login', dir: 'asc' };
+const userUsageTableState = {
+    sortKey: 'user_login',
+    sortDir: 'asc',
+    query: '',
+    page: 1,
+    pageSize: 25
+};
 
-function toggleUserUsage(show) {
-    const section = document.getElementById('userUsageSection');
-    const chartsSec = document.getElementById('chartsSection');
-    if (!section || !chartsSec) return;
-    section.hidden = !show;
-    chartsSec.hidden = show;
-    const creditsSec = document.getElementById('creditsSection');
-    if (creditsSec && window.__hasCredits) creditsSec.hidden = show;
-    if (show) {
-        section.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
-        document.getElementById('exportUsersCsvBtn')?.removeAttribute('disabled');
-        section.focus({ preventScroll: true });
-    } else {
-        chartsSec.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
-        chartsSec.focus({ preventScroll: true });
+function initializeUserUsageControls() {
+    const search = document.getElementById('userTableSearch');
+    const pageSize = document.getElementById('userTablePageSize');
+    const previous = document.getElementById('userTablePrevBtn');
+    const next = document.getElementById('userTableNextBtn');
+
+    if (search) {
+        search.addEventListener('input', () => {
+            userUsageTableState.query = search.value.trim().toLowerCase();
+            userUsageTableState.page = 1;
+            renderUserUsageRows();
+        });
     }
+    if (pageSize) {
+        pageSize.addEventListener('change', () => {
+            const selectedSize = Number(pageSize.value);
+            userUsageTableState.pageSize = [10, 25, 50, 100].includes(selectedSize) ? selectedSize : 25;
+            userUsageTableState.page = 1;
+            renderUserUsageRows();
+        });
+    }
+    if (previous) {
+        previous.addEventListener('click', () => {
+            if (userUsageTableState.page <= 1) return;
+            userUsageTableState.page -= 1;
+            renderUserUsageRows();
+        });
+    }
+    if (next) {
+        next.addEventListener('click', () => {
+            userUsageTableState.page += 1;
+            renderUserUsageRows();
+        });
+    }
+}
+
+function resetUserUsageTableState({ clearQuery = false, resetPreferences = false } = {}) {
+    userUsageTableState.page = 1;
+    if (resetPreferences) {
+        userUsageTableState.sortKey = 'user_login';
+        userUsageTableState.sortDir = 'asc';
+        userUsageTableState.pageSize = 25;
+    }
+    if (clearQuery) {
+        userUsageTableState.query = '';
+        const search = document.getElementById('userTableSearch');
+        if (search) search.value = '';
+    }
+    const pageSize = document.getElementById('userTablePageSize');
+    if (pageSize) pageSize.value = String(userUsageTableState.pageSize);
 }
 
 function aggregateUserUsage(data, creditsByUser) {
@@ -2837,21 +3024,14 @@ function buildUserUsageTable(data) {
     const table = document.getElementById('userUsageTable');
     if (!table) return;
     const thead = table.querySelector('thead');
-    const tbody = table.querySelector('tbody');
     const creditsByUser = creditsByUserIndex(filterCreditRows(window.__aiCreditsRaw || [], getActiveFilterState()));
     const rows = aggregateUserUsage(data, creditsByUser);
     window.__userUsageRows = rows;
     const columns = buildUserUsageColumns();
     window.__userUsageColumns = columns;
-    const exportBtn = document.getElementById('exportUsersCsvBtn');
-    // Build head
+    userUsageTableState.page = 1;
+
     thead.innerHTML = '';
-    if (!rows.length) {
-        if (exportBtn) exportBtn.disabled = true;
-        tbody.innerHTML = `<tr><td colspan="${columns.length}">No user-level records are available for the current filters.</td></tr>`;
-        return;
-    }
-    if (exportBtn) exportBtn.disabled = false;
     const tr = document.createElement('tr');
     columns.forEach(h => {
         const th = document.createElement('th');
@@ -2859,18 +3039,22 @@ function buildUserUsageTable(data) {
         th.dataset.label = h.label;
         th.scope = 'col';
         th.classList.add('sortable');
-        th.setAttribute('aria-sort', h.key === userUsageSort.key ? (userUsageSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+        th.setAttribute('aria-sort', h.key === userUsageTableState.sortKey
+            ? (userUsageTableState.sortDir === 'asc' ? 'ascending' : 'descending')
+            : 'none');
         const sortBtn = document.createElement('button');
         sortBtn.type = 'button';
         sortBtn.className = 'sort-button';
         sortBtn.textContent = h.label;
         sortBtn.setAttribute('aria-label', `Sort by ${h.label}`);
         sortBtn.addEventListener('click', () => {
-            if (userUsageSort.key === h.key) {
-                userUsageSort.dir = userUsageSort.dir === 'asc' ? 'desc' : 'asc';
+            if (userUsageTableState.sortKey === h.key) {
+                userUsageTableState.sortDir = userUsageTableState.sortDir === 'asc' ? 'desc' : 'asc';
             } else {
-                userUsageSort.key = h.key; userUsageSort.dir = 'asc';
+                userUsageTableState.sortKey = h.key;
+                userUsageTableState.sortDir = 'asc';
             }
+            userUsageTableState.page = 1;
             renderUserUsageRows();
         });
         th.appendChild(sortBtn);
@@ -2878,35 +3062,103 @@ function buildUserUsageTable(data) {
     });
     thead.appendChild(tr);
     renderUserUsageRows();
+}
 
-    function renderUserUsageRows() {
-        const key = userUsageSort.key; const dir = userUsageSort.dir === 'asc' ? 1 : -1;
-        rows.sort((a,b) => {
-            const va = a[key]; const vb = b[key];
-            if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
-            return String(va ?? '').localeCompare(String(vb ?? ''), undefined, { sensitivity: 'base' }) * dir;
-        });
-        tbody.innerHTML = rows.map(r => '<tr>' + columns.map(col => {
+function getFilteredAndSortedUserUsageRows(rows = window.__userUsageRows || []) {
+    const query = userUsageTableState.query;
+    const filtered = query
+        ? rows.filter(row => String(row.user_login || '').toLowerCase().includes(query))
+        : [...rows];
+    const key = userUsageTableState.sortKey;
+    const direction = userUsageTableState.sortDir === 'asc' ? 1 : -1;
+    return filtered.sort((a, b) => {
+        const aValue = a[key];
+        const bValue = b[key];
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+            return (aValue - bValue) * direction;
+        }
+        return String(aValue ?? '').localeCompare(
+            String(bValue ?? ''),
+            undefined,
+            { sensitivity: 'base' }
+        ) * direction;
+    });
+}
+
+function renderUserUsageRows() {
+    const table = document.getElementById('userUsageTable');
+    if (!table) return;
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    const rows = window.__userUsageRows || [];
+    const columns = window.__userUsageColumns || buildUserUsageColumns();
+    const matchingRows = getFilteredAndSortedUserUsageRows(rows);
+    const pageSize = userUsageTableState.pageSize;
+    const pageCount = Math.max(1, Math.ceil(matchingRows.length / pageSize));
+    userUsageTableState.page = Math.min(Math.max(1, userUsageTableState.page), pageCount);
+    const startIndex = (userUsageTableState.page - 1) * pageSize;
+    const pageRows = matchingRows.slice(startIndex, startIndex + pageSize);
+
+    if (pageRows.length) {
+        tbody.innerHTML = pageRows.map(r => '<tr>' + columns.map(col => {
             const cell = renderUserUsageCell(col, r);
             return col.rowHeader ? `<th scope="row">${cell}</th>` : `<td>${cell}</td>`;
         }).join('') + '</tr>').join('');
-        thead.querySelectorAll('th.sortable').forEach(th => {
-            const isActive = th.dataset.key === key;
-            const label = th.dataset.label || th.dataset.key;
-            th.setAttribute('aria-sort', isActive ? (dir === 1 ? 'ascending' : 'descending') : 'none');
-            th.classList.toggle('sort-asc', isActive && dir === 1);
-            th.classList.toggle('sort-desc', isActive && dir !== 1);
-            const button = th.querySelector('.sort-button');
-            if (button) {
-                button.setAttribute(
-                    'aria-label',
-                    isActive
-                        ? `${label}, sorted ${dir === 1 ? 'ascending' : 'descending'}. Activate to sort ${dir === 1 ? 'descending' : 'ascending'}.`
-                        : `Sort by ${label}`
-                );
-            }
-        });
+    } else {
+        const emptyMessage = rows.length
+            ? `No users match "${userUsageTableState.query}" in this table.`
+            : 'No user-level records are available for the current global filters.';
+        tbody.innerHTML = `<tr><td class="user-table-empty" colspan="${columns.length}">${escapeHtml(emptyMessage)}</td></tr>`;
     }
+
+    const direction = userUsageTableState.sortDir === 'asc' ? 1 : -1;
+    thead.querySelectorAll('th.sortable').forEach(th => {
+        const isActive = th.dataset.key === userUsageTableState.sortKey;
+        const label = th.dataset.label || th.dataset.key;
+        th.setAttribute('aria-sort', isActive ? (direction === 1 ? 'ascending' : 'descending') : 'none');
+        th.classList.toggle('sort-asc', isActive && direction === 1);
+        th.classList.toggle('sort-desc', isActive && direction !== 1);
+        const button = th.querySelector('.sort-button');
+        if (button) {
+            button.setAttribute(
+                'aria-label',
+                isActive
+                    ? `${label}, sorted ${direction === 1 ? 'ascending' : 'descending'}. Activate to sort ${direction === 1 ? 'descending' : 'ascending'}.`
+                    : `Sort by ${label}`
+            );
+        }
+    });
+
+    const resultCount = document.getElementById('userTableResultCount');
+    if (resultCount) {
+        resultCount.textContent = userUsageTableState.query
+            ? `${matchingRows.length.toLocaleString()} of ${rows.length.toLocaleString()} users`
+            : `${rows.length.toLocaleString()} users`;
+    }
+    const pageRange = document.getElementById('userTablePageRange');
+    if (pageRange) {
+        const first = matchingRows.length ? startIndex + 1 : 0;
+        const last = matchingRows.length ? startIndex + pageRows.length : 0;
+        pageRange.textContent = matchingRows.length
+            ? `Showing ${first.toLocaleString()}–${last.toLocaleString()} of ${matchingRows.length.toLocaleString()} users`
+            : 'No users to display';
+    }
+    const pageStatus = document.getElementById('userTablePageStatus');
+    if (pageStatus) pageStatus.textContent = `Page ${userUsageTableState.page} of ${pageCount}`;
+
+    const previous = document.getElementById('userTablePrevBtn');
+    const next = document.getElementById('userTableNextBtn');
+    const pageSizeSelect = document.getElementById('userTablePageSize');
+    const search = document.getElementById('userTableSearch');
+    const exportBtn = document.getElementById('exportUsersCsvBtn');
+    if (previous) previous.disabled = !matchingRows.length || userUsageTableState.page <= 1;
+    if (next) next.disabled = !matchingRows.length || userUsageTableState.page >= pageCount;
+    if (pageSizeSelect) {
+        pageSizeSelect.value = String(pageSize);
+        pageSizeSelect.disabled = !rows.length;
+    }
+    if (search) search.disabled = !rows.length;
+    if (exportBtn) exportBtn.disabled = !matchingRows.length;
 }
 
 function exportUserUsageCsv() {
@@ -2917,7 +3169,11 @@ function exportUserUsageCsv() {
         rows = aggregateUserUsage(window.__currentFilteredData || window.__rawData || [], creditsByUser);
         columns = buildUserUsageColumns();
     }
-    if (!rows.length) { setStatus('No per-user rows are available to export for the current filters.', true); return; }
+    rows = getFilteredAndSortedUserUsageRows(rows);
+    if (!rows.length) {
+        setStatus('No per-user rows match the current global filters and table search.', true);
+        return;
+    }
     const csvValue = (col, r) => {
         if (col.csv) return col.csv(r);
         const val = r[col.key];
@@ -2947,6 +3203,7 @@ function exportUserUsageCsv() {
     a.href = url; a.download = `copilot-user-usage-${dateStr}.csv`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    setStatus(`Exported ${rows.length.toLocaleString()} matching users to CSV.`);
 }
 
 function csvEscape(val) {
@@ -3131,24 +3388,42 @@ function buildCreditsModel(rows) {
     };
 }
 
-function renderAiCreditsSection(cm) {
+function renderAiCreditsSection(cm, hasReport = false) {
     const section = document.getElementById('creditsSection');
     const metricsEl = document.getElementById('creditsMetrics');
     const chartsEl = document.getElementById('creditsCharts');
     const tablesEl = document.getElementById('creditsTables');
     if (!section || !metricsEl || !chartsEl || !tablesEl) return;
 
-    if (!cm || !cm.rows.length) {
+    if (!hasReport) {
         window.__hasCredits = false;
-        section.hidden = true;
         metricsEl.innerHTML = '';
+        chartsEl.innerHTML = '';
+        tablesEl.innerHTML = '';
+        updateDashboardPageAvailability();
+        return;
+    }
+
+    window.__hasCredits = true;
+    updateDashboardPageAvailability();
+    if (!cm || !cm.rows.length) {
+        metricsEl.innerHTML = `<div class="page-empty-state" role="note">
+            <h3>No AI Credit rows match the global filters</h3>
+            <p>Widen the date range, clear the global user filter, or turn off members-only filtering.</p>
+        </div>`;
         chartsEl.innerHTML = '';
         tablesEl.innerHTML = '';
         return;
     }
 
-    window.__hasCredits = true;
-    section.hidden = false;
+    withDashboardPageMeasurable(
+        'credits',
+        () => renderAiCreditsSectionContent(cm, metricsEl, chartsEl, tablesEl)
+    );
+    enableDownloadButton();
+}
+
+function renderAiCreditsSectionContent(cm, metricsEl, chartsEl, tablesEl) {
     const t = cm.totals;
 
     const cards = [
@@ -3250,15 +3525,16 @@ function renderAiCreditsSection(cm) {
         ));
     }
     tablesEl.innerHTML = blocks.join('');
-
-    enableDownloadButton();
 }
 
 function updateCreditsView() {
     const raw = window.__aiCreditsRaw;
-    if (!raw || !raw.length) { renderAiCreditsSection(null); return; }
+    if (!raw || !raw.length) {
+        renderAiCreditsSection(null, false);
+        return;
+    }
     const filtered = filterCreditRows(raw, getActiveFilterState());
-    renderAiCreditsSection(buildCreditsModel(filtered));
+    renderAiCreditsSection(buildCreditsModel(filtered), true);
 }
 
 function refreshDateBoundsUnion() {

@@ -15,7 +15,7 @@
     </script>
     <title>GitHub Copilot Metrics Analyzer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f6f8fa'/%3E%3Cpath d='M8 22h4V14H8zm6 0h4V10h-4zm6 0h4V17h-4z' fill='%230969da'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="style.css?v=20260710-phase-meanings" />
+    <link rel="stylesheet" href="style.css?v=20260710-unified-header-4" />
 </head>
 <body>
     <svg class="octicon-sprite" aria-hidden="true" focusable="false">
@@ -67,45 +67,51 @@
     </svg>
     <a class="skip-link" href="#mainContent">Skip to dashboard content</a>
     <header class="app-header">
-        <div class="logo-title">
-            <svg class="octicon brand-icon" aria-hidden="true" focusable="false"><use href="#icon-mark-github"></use></svg>
-            <div class="title-stack">
-                <p class="section-kicker header-kicker">Local analytics</p>
-                <h1>GitHub Copilot Metrics Analyzer</h1>
+        <div class="app-header-main">
+            <div class="logo-title">
+                <svg class="octicon brand-icon" aria-hidden="true" focusable="false"><use href="#icon-mark-github"></use></svg>
+                <div class="title-stack">
+                    <p class="section-kicker header-kicker">Local analytics</p>
+                    <h1>GitHub Copilot Metrics Analyzer</h1>
+                </div>
             </div>
+            <nav class="top-nav" aria-label="Primary">
+                <ul class="nav-list">
+                    <li>
+                        <button type="button" id="themeToggle" class="theme-toggle icon-button" aria-label="Switch to dark mode">
+                            <svg class="octicon theme-icon-sun" aria-hidden="true" focusable="false"><use href="#icon-sun"></use></svg>
+                            <svg class="octicon theme-icon-moon" aria-hidden="true" focusable="false"><use href="#icon-moon"></use></svg>
+                        </button>
+                    </li>
+                    <li><a href="https://github.com/abhi-singhs/copilot-metrics-analysis/blob/main/README.md" target="_blank" rel="noopener noreferrer" aria-label="Open usage guide README in new tab" title="Usage guide"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-book"></use></svg><span class="top-nav-label">Usage guide</span></a></li>
+                </ul>
+            </nav>
         </div>
-        <nav class="top-nav" aria-label="Primary">
-            <ul class="nav-list">
-                <li>
-                    <button type="button" id="themeToggle" class="theme-toggle icon-button" aria-label="Switch to dark mode">
-                        <svg class="octicon theme-icon-sun" aria-hidden="true" focusable="false"><use href="#icon-sun"></use></svg>
-                        <svg class="octicon theme-icon-moon" aria-hidden="true" focusable="false"><use href="#icon-moon"></use></svg>
-                    </button>
-                </li>
-                <li><a href="https://github.com/abhi-singhs/copilot-metrics-analysis/blob/main/README.md" target="_blank" rel="noopener noreferrer" aria-label="Open usage guide README in new tab"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-book"></use></svg>Usage guide</a></li>
+        <nav class="page-nav" aria-label="Dashboard pages">
+            <span class="page-nav-label" aria-hidden="true">Pages</span>
+            <ul class="page-nav-list">
+                <li><a href="#overview" data-page-target="overview" aria-current="page"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Overview</a></li>
+                <li><a href="#charts" data-page-target="charts"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Charts</a></li>
+                <li data-page-link="credits" hidden><a href="#credits" data-page-target="credits"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-credit-card"></use></svg>AI Credits</a></li>
+                <li><a href="#tables" data-page-target="tables"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-table"></use></svg>Reference tables</a></li>
+                <li><a href="#users" data-page-target="users"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-people"></use></svg>Users</a></li>
             </ul>
+            <button type="button" id="downloadPdfBtn" class="secondary page-nav-download" disabled aria-label="Download dashboard as PDF" title="Download PDF"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg><span class="page-nav-download-label">Download PDF</span><span class="page-nav-download-label-short" aria-hidden="true">PDF</span></button>
         </nav>
     </header>
     <main id="mainContent" tabindex="-1">
-        <nav class="section-nav" aria-label="Jump to section">
-            <span class="section-nav-label" aria-hidden="true">Jump to</span>
-            <ul class="section-nav-list">
-                <li><a href="#controlsSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-filter"></use></svg>Load &amp; filter</a></li>
-                <li><a href="#summarySection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Key metrics</a></li>
-                <li data-section-link="chartsSection"><a href="#chartsSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Charts</a></li>
-                <li data-section-link="creditsSection" hidden><a href="#creditsSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-credit-card"></use></svg>AI Credits</a></li>
-                <li data-section-link="tablesSection" hidden><a href="#tablesSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-table"></use></svg>Reference tables</a></li>
-                <li data-section-link="userUsageSection" hidden><a href="#userUsageSection"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-people"></use></svg>Per-user detail</a></li>
-            </ul>
-        </nav>
         <section id="controlsSection" class="panel controls-panel" role="region" aria-labelledby="controlsHeading">
-            <div class="section-heading section-heading-compact controls-heading">
-                <div class="heading-copy">
-                    <h2 id="controlsHeading" class="panel-title"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-upload"></use></svg>Load metrics and filter the view</h2>
+            <details id="controlsDrawer" class="controls-disclosure" open>
+                <summary class="controls-summary">
+                    <span class="controls-summary-copy">
+                        <span id="controlsHeading" class="controls-summary-title" role="heading" aria-level="2"><svg class="octicon heading-icon" aria-hidden="true" focusable="false"><use href="#icon-upload"></use></svg>Load metrics and filter the view</span>
+                        <span id="controlsSummaryText" class="controls-summary-text">No metrics loaded. Open the controls to upload an export.</span>
+                    </span>
+                    <span class="controls-summary-action" aria-hidden="true"></span>
+                </summary>
+                <div class="controls-drawer-body">
                     <p class="panel-intro">Upload a metrics export, then filter or export the current view. Everything stays in your browser.</p>
-                </div>
-            </div>
-            <form id="filtersForm" class="filters-form" novalidate>
+                    <form id="filtersForm" class="filters-form" novalidate>
                 <fieldset class="control-surface control-surface-main data-group">
                     <legend class="legend-title solo">Controls</legend>
                     <div class="control-toolbar">
@@ -161,8 +167,8 @@
                         <div class="toolbar-side">
                             <div class="toolbar-filters">
                                 <div class="control-item toolbar-item toolbar-search">
-                                    <label for="userSearch">User search</label>
-                                    <input type="text" id="userSearch" placeholder="Filter by login" />
+                                    <label for="userSearch">Dashboard user filter</label>
+                                    <input type="text" id="userSearch" placeholder="Filter every page by login" />
                                 </div>
                                 <div class="control-item toolbar-item toolbar-toggle">
                                     <label class="inline-checkbox" for="membersOnlyChk">
@@ -174,8 +180,6 @@
                             <div class="actions-row actions-row-compact" role="group" aria-label="Dashboard actions">
                                 <button type="button" id="applyFiltersBtn" class="secondary" disabled aria-label="Apply current filters"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-filter"></use></svg>Apply</button>
                                 <button type="button" id="resetFiltersBtn" class="secondary"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-sync"></use></svg>Reset</button>
-                                <button type="button" id="downloadPdfBtn" class="secondary" disabled aria-label="Download dashboard as PDF"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg>Download PDF</button>
-                                <button type="button" id="userUsageBtn" class="secondary" disabled aria-label="View per-user detail table"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-table"></use></svg>User table</button>
                                 <button type="button" id="clearDataBtn" class="secondary danger-action" disabled aria-label="Clear all loaded data and reset the dashboard"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-trash"></use></svg>Clear</button>
                             </div>
                             <div class="side-details">
@@ -231,11 +235,13 @@
                         </div>
                     </div>
                 </fieldset>
-            </form>
+                    </form>
+                </div>
+            </details>
             <div id="statusMessage" class="status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
         </section>
 
-        <section id="summarySection" class="panel metrics-panel" role="region" aria-labelledby="summaryHeading">
+        <section id="summarySection" class="panel metrics-panel page-panel is-active" data-page="overview" role="region" aria-labelledby="summaryHeading" aria-hidden="false" tabindex="-1">
             <div class="section-heading section-heading-compact">
                 <div>
                     <p class="section-kicker">Overview</p>
@@ -246,7 +252,7 @@
             <div id="summaryMetrics" class="metrics-grid" aria-live="polite"></div>
         </section>
 
-        <section id="chartsSection" class="panel charts-panel" role="region" aria-labelledby="chartsHeading" tabindex="-1">
+        <section id="chartsSection" class="panel charts-panel page-panel" data-page="charts" role="region" aria-labelledby="chartsHeading" aria-hidden="true" tabindex="-1" hidden>
             <div class="section-heading section-heading-compact">
                 <div>
                     <p class="section-kicker">Analysis</p>
@@ -257,7 +263,7 @@
             <div id="chartsContainer" class="charts-grid" aria-live="polite"></div>
         </section>
 
-        <section id="creditsSection" class="panel charts-panel" role="region" aria-labelledby="creditsHeading" tabindex="-1" hidden>
+        <section id="creditsSection" class="panel charts-panel page-panel" data-page="credits" role="region" aria-labelledby="creditsHeading" aria-hidden="true" tabindex="-1" hidden>
             <div class="section-heading section-heading-compact">
                 <div>
                     <p class="section-kicker">Cost</p>
@@ -270,7 +276,7 @@
             <div id="creditsTables" class="table-blocks" aria-live="polite"></div>
         </section>
 
-        <section id="tablesSection" class="panel tables-panel" role="region" aria-labelledby="tablesHeading" hidden>
+        <section id="tablesSection" class="panel tables-panel page-panel" data-page="tables" role="region" aria-labelledby="tablesHeading" aria-hidden="true" tabindex="-1" hidden>
             <div class="section-heading section-heading-compact">
                 <div>
                     <p class="section-kicker">Reference</p>
@@ -281,7 +287,7 @@
             <div id="tablesContainer" class="table-blocks" aria-live="polite"></div>
         </section>
 
-        <section id="userUsageSection" class="panel" role="region" aria-labelledby="userUsageHeading" tabindex="-1" hidden>
+        <section id="userUsageSection" class="panel page-panel" data-page="users" role="region" aria-labelledby="userUsageHeading" aria-hidden="true" tabindex="-1" hidden>
             <div class="user-usage-header">
                 <div>
                     <p class="section-kicker">Per-user view</p>
@@ -289,16 +295,41 @@
                 </div>
                 <div class="user-usage-actions">
                     <button type="button" id="exportUsersCsvBtn" class="secondary" disabled aria-label="Export per-user usage as CSV"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg>Export CSV</button>
-                    <button type="button" id="backToDashboardBtn" class="secondary" aria-label="Return to charts dashboard"><svg class="octicon" aria-hidden="true" focusable="false"><use href="#icon-graph"></use></svg>Back to overview</button>
                 </div>
             </div>
-            <p class="small-note" id="userUsageNote">Aggregated user-level metrics based on the current filters, including AI Credits used, activity flags, CLI usage, and richer LoC totals when the export contains user records. Use the column buttons to sort the table.</p>
+            <p class="small-note" id="userUsageNote">Aggregated user-level metrics based on the global filters. Search this table independently, sort with the column buttons, and export every matching user across all pages.</p>
+            <div class="user-table-toolbar">
+                <div class="control-item user-table-search-control">
+                    <label for="userTableSearch">Search users in this table</label>
+                    <input type="search" id="userTableSearch" placeholder="Search by login" autocomplete="off" />
+                </div>
+                <div class="user-table-toolbar-meta">
+                    <span id="userTableResultCount" class="small-note" aria-live="polite">0 users</span>
+                    <label class="page-size-control" for="userTablePageSize">
+                        <span>Rows per page</span>
+                        <select id="userTablePageSize">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
             <div class="user-table-wrapper" tabindex="0">
-                <table id="userUsageTable" class="usage-table" aria-describedby="userUsageNote">
+                <table id="userUsageTable" class="usage-table" aria-describedby="userUsageNote userTableResultCount">
                     <thead></thead>
                     <tbody></tbody>
                 </table>
             </div>
+            <nav class="user-table-pagination" aria-label="User table pagination">
+                <span id="userTablePageRange" class="small-note" aria-live="polite">No users to display</span>
+                <div class="pagination-actions">
+                    <button type="button" id="userTablePrevBtn" class="secondary" disabled>Previous</button>
+                    <span id="userTablePageStatus" class="pagination-status" aria-live="polite">Page 1 of 1</span>
+                    <button type="button" id="userTableNextBtn" class="secondary" disabled>Next</button>
+                </div>
+            </nav>
         </section>
     </main>
 
@@ -326,6 +357,6 @@
     <!-- Libraries for enhanced PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/3.0.2/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="script.js?v=20260710-phase-meanings"></script>
+    <script src="script.js?v=20260710-no-page-scroll-2"></script>
 </body>
 </html>
